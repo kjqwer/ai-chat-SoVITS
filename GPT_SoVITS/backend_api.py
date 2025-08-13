@@ -12,8 +12,9 @@ import torch
 import psutil
 import numpy as np
 import soundfile as sf
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -314,6 +315,16 @@ app.add_middleware(
     allow_headers=["*"],  # 允许所有请求头
 )
 
+# 添加静态文件服务
+dist_path = os.path.join(now_dir, "ui", "dist")
+if os.path.exists(dist_path):
+    # 挂载静态文件目录
+    app.mount("/static", StaticFiles(directory=dist_path), name="static")
+    print(f"前端静态文件目录: {dist_path}")
+else:
+    print(f"前端静态文件目录不存在: {dist_path}")
+    print("请先构建前端项目: cd ui && pnpm build")
+
 @app.get("/models/sovits", response_model=List[SoVITSModelInfo])
 async def get_sovits_models():
     """获取SoVITS模型列表和当前使用模型"""
@@ -477,6 +488,49 @@ async def get_status():
         "temp_dir": temp_dir,
     }
 
+# 前端路由处理
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    """服务前端首页"""
+    index_path = os.path.join(dist_path, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(content="<h1>前端文件未找到</h1><p>请先构建前端项目: cd ui && pnpm build</p>")
+
+@app.get("/{path:path}", response_class=HTMLResponse)
+async def serve_frontend_routes(path: str):
+    """处理前端路由（SPA模式）"""
+    # 检查是否是API路径
+    if path.startswith("models/") or path.startswith("characters/") or path.startswith("config/") or path.startswith("tts") or path.startswith("status"):
+        # 让FastAPI处理API路由
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+    
+    # 检查是否是静态资源
+    static_file_path = os.path.join(dist_path, path)
+    if os.path.exists(static_file_path) and os.path.isfile(static_file_path):
+        # 根据文件扩展名返回适当的MIME类型
+        if path.endswith('.js'):
+            with open(static_file_path, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read(), media_type="application/javascript")
+        elif path.endswith('.css'):
+            with open(static_file_path, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read(), media_type="text/css")
+        elif path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.ico')):
+            return FileResponse(static_file_path)
+        else:
+            with open(static_file_path, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read())
+    
+    # 对于其他路径，返回index.html（SPA路由）
+    index_path = os.path.join(dist_path, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(content="<h1>前端文件未找到</h1><p>请先构建前端项目: cd ui && pnpm build</p>")
+
 # 清理函数
 import atexit
 import shutil
@@ -493,4 +547,16 @@ def cleanup_temp_files():
 atexit.register(cleanup_temp_files)
 
 if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("🚀 GPT-SoVITS TTS 服务启动中...")
+    print("="*60)
+    print(f"📡 API服务地址: http://localhost:8000")
+    print(f"📚 API文档地址: http://localhost:8000/docs")
+    if os.path.exists(dist_path):
+        print(f"🎨 前端界面地址: http://localhost:8000")
+    else:
+        print(f"⚠️  前端未构建，请运行: cd ui && pnpm build")
+    print("="*60)
+    print("按 Ctrl+C 停止服务\n")
+    
     uvicorn.run(app, host="0.0.0.0", port=8000) 

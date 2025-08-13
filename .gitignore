@@ -4,3 +4,4 @@ reference_audios/
 weight.json
 .vscode/
 __pycache__/
+ai-config.json
