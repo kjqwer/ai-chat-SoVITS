@@ -1,0 +1,6 @@
+runtime/
+SoVITS_weights_v4/
+reference_audios/
+weight.json
+.vscode/
+__pycache__/
