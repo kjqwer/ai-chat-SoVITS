@@ -505,6 +505,45 @@ async def save_config(request: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
 
+@app.get("/api/get-config")
+async def get_config():
+    """获取AI配置"""
+    try:
+        config_path = os.path.join(dist_path, "ai-config.json")
+        
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            return config
+        else:
+            # 如果配置文件不存在，返回默认配置
+            default_config = {
+                "API_CONFIGS": [{
+                    "name": "默认OpenAI配置",
+                    "baseURL": "https://api.openai.com/v1",
+                    "apiKey": "your-openai-api-key",
+                    "model": "gpt-3.5-turbo",
+                    "timeout": 30000,
+                    "isDefault": True,
+                    "defaultParams": {
+                        "temperature": 0.7,
+                        "max_tokens": 1000,
+                        "top_p": 1,
+                        "frequency_penalty": 0,
+                        "presence_penalty": 0
+                    }
+                }],
+                "DEFAULT_PERSONAS": [{
+                    "id": "assistant",
+                    "name": "智能助手",
+                    "description": "友善、专业的AI助手",
+                    "prompt": "你是一个友善、专业且富有知识的AI助手。请用清晰、有帮助的方式回答用户的问题。保持礼貌和耐心，如果不确定答案，请诚实说明。"
+                }]
+            }
+            return default_config
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取配置失败: {str(e)}")
+
 # 前端路由处理
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():

@@ -122,18 +122,41 @@
 
       <!-- 保存按钮 -->
       <div class="save-actions">
-        <el-button type="success" size="large" @click="saveConfig" :loading="saving">
-          <el-icon>
-            <Check />
-          </el-icon>
-          保存配置
-        </el-button>
-        <el-button size="large" @click="resetConfig">
-          <el-icon>
-            <RefreshLeft />
-          </el-icon>
-          重置配置
-        </el-button>
+        <!-- 变更提醒 -->
+        <div v-if="hasChanges" class="changes-warning">
+          <el-alert
+            title="您有未保存的配置修改"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 20px;"
+          >
+            请点击"保存配置"按钮保存您的修改，否则刷新页面后将丢失所有更改。
+          </el-alert>
+        </div>
+        
+        <div class="action-buttons">
+          <el-button 
+            :type="hasChanges ? 'warning' : 'success'" 
+            size="large" 
+            @click="saveConfig" 
+            :loading="saving"
+            :disabled="!hasChanges"
+            :class="{ 'save-button-highlight': hasChanges }"
+            title="保存所有配置修改，或使用快捷键 Ctrl+S"
+          >
+            <el-icon>
+              <Check />
+            </el-icon>
+            {{ hasChanges ? '保存配置 *' : '保存配置' }}
+          </el-button>
+          <el-button size="large" @click="resetConfig">
+            <el-icon>
+              <RefreshLeft />
+            </el-icon>
+            重置配置
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -148,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Key,
@@ -165,6 +188,10 @@ const apiConfigs = ref([])
 const personas = ref([])
 const saving = ref(false)
 
+// 添加原始配置用于变更检测
+const originalApiConfigs = ref([])
+const originalPersonas = ref([])
+
 // 对话框状态
 const apiDialogVisible = ref(false)
 const personaDialogVisible = ref(false)
@@ -173,14 +200,63 @@ const personaDialogMode = ref('add') // 'add' | 'edit'
 const currentApiIndex = ref(-1)
 const currentPersonaIndex = ref(-1)
 
-
-
 // 当前编辑数据存储（用于传递给子组件）
 const currentApiConfig = ref({})
 const currentPersona = ref({})
 
+// 计算是否有变更
+const hasChanges = computed(() => {
+  return JSON.stringify(apiConfigs.value) !== JSON.stringify(originalApiConfigs.value) ||
+         JSON.stringify(personas.value) !== JSON.stringify(originalPersonas.value)
+})
+
 // 加载配置
 const loadConfig = async () => {
+  try {
+    // 改为从API端点加载配置
+    const response = await fetch('/api/get-config')
+    if (response.ok) {
+      const config = await response.json()
+
+      // 处理API配置
+      if (config.API_CONFIGS && Array.isArray(config.API_CONFIGS)) {
+        apiConfigs.value = config.API_CONFIGS.map(cfg => ({
+          ...cfg,
+          timeout: cfg.timeout / 1000 // 转换为秒
+        }))
+      } else if (config.AI_CONFIG) {
+        // 兼容旧格式
+        apiConfigs.value = [{
+          name: '默认配置',
+          ...config.AI_CONFIG,
+          timeout: config.AI_CONFIG.timeout / 1000,
+          isDefault: true
+        }]
+      }
+
+      // 处理人格配置
+      if (config.DEFAULT_PERSONAS && Array.isArray(config.DEFAULT_PERSONAS)) {
+        personas.value = [...config.DEFAULT_PERSONAS]
+      }
+
+      // 保存原始配置
+      originalApiConfigs.value = JSON.parse(JSON.stringify(apiConfigs.value))
+      originalPersonas.value = JSON.parse(JSON.stringify(personas.value))
+
+      ElMessage.success('配置加载成功')
+    } else {
+      // 配置文件不存在，创建默认配置
+      await createDefaultConfig()
+    }
+  } catch (error) {
+    console.error('加载配置失败:', error)
+    // 尝试从静态文件加载作为后备
+    await loadConfigFromStaticFile()
+  }
+}
+
+// 从静态文件加载配置（后备方案）
+const loadConfigFromStaticFile = async () => {
   try {
     const response = await fetch('/ai-config.json')
     if (response.ok) {
@@ -207,13 +283,16 @@ const loadConfig = async () => {
         personas.value = [...config.DEFAULT_PERSONAS]
       }
 
+      // 保存原始配置
+      originalApiConfigs.value = JSON.parse(JSON.stringify(apiConfigs.value))
+      originalPersonas.value = JSON.parse(JSON.stringify(personas.value))
+
       ElMessage.success('配置加载成功')
     } else {
-      // 配置文件不存在，创建默认配置
       await createDefaultConfig()
     }
   } catch (error) {
-    console.error('加载配置失败:', error)
+    console.error('从静态文件加载配置失败:', error)
     await createDefaultConfig()
   }
 }
@@ -242,6 +321,10 @@ const createDefaultConfig = async () => {
     description: '友善、专业的AI助手',
     prompt: '你是一个友善、专业且富有知识的AI助手。请用清晰、有帮助的方式回答用户的问题。保持礼貌和耐心，如果不确定答案，请诚实说明。'
   }]
+
+  // 保存原始配置
+  originalApiConfigs.value = JSON.parse(JSON.stringify(apiConfigs.value))
+  originalPersonas.value = JSON.parse(JSON.stringify(personas.value))
 
   ElMessage.info('已创建默认配置')
 }
@@ -277,6 +360,9 @@ const saveConfig = async () => {
     })
 
     if (response.ok) {
+      // 保存成功后更新原始配置，清除变更状态
+      originalApiConfigs.value = JSON.parse(JSON.stringify(apiConfigs.value))
+      originalPersonas.value = JSON.parse(JSON.stringify(personas.value))
       ElMessage.success('配置保存成功')
     } else {
       throw new Error('保存失败')
@@ -315,6 +401,11 @@ const handleApiConfigSave = (config) => {
   } else {
     apiConfigs.value[currentApiIndex.value] = { ...config }
   }
+  
+  // 提示用户保存配置
+  if (hasChanges.value) {
+    ElMessage.info('请点击"保存配置"按钮保存您的修改')
+  }
 }
 
 const deleteApiConfig = async (index) => {
@@ -350,6 +441,11 @@ const handlePersonaSave = (persona) => {
     personas.value.push({ ...persona })
   } else {
     personas.value[currentPersonaIndex.value] = { ...persona }
+  }
+  
+  // 提示用户保存配置
+  if (hasChanges.value) {
+    ElMessage.info('请点击"保存配置"按钮保存您的修改')
   }
 }
 
@@ -394,6 +490,35 @@ const truncateText = (text, maxLength) => {
 // 组件挂载时加载配置
 onMounted(() => {
   loadConfig()
+  
+  // 页面离开前检查未保存的配置
+  const handleBeforeUnload = (event) => {
+    if (hasChanges.value) {
+      event.preventDefault()
+      event.returnValue = '您有未保存的配置修改，确定要离开吗？'
+      return '您有未保存的配置修改，确定要离开吗？'
+    }
+  }
+  
+  // 快捷键保存配置 (Ctrl+S)
+  const handleKeyDown = (event) => {
+    if (event.ctrlKey && event.key === 's') {
+      event.preventDefault()
+      if (hasChanges.value && !saving.value) {
+        saveConfig()
+        ElMessage.info('使用快捷键 Ctrl+S 保存配置')
+      }
+    }
+  }
+  
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  document.addEventListener('keydown', handleKeyDown)
+  
+  // 组件卸载时清理事件监听器
+  return () => {
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+    document.removeEventListener('keydown', handleKeyDown)
+  }
 })
 </script>
 
@@ -559,9 +684,55 @@ onMounted(() => {
 
 .save-actions {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 0;
+}
+
+.action-buttons {
+  display: flex;
   justify-content: center;
   gap: 20px;
-  padding: 30px 0;
+}
+
+.changes-warning {
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 20px;
+}
+
+/* 保存按钮高亮效果 */
+.save-button-highlight {
+  position: relative;
+  overflow: hidden;
+  animation: pulse 2s infinite;
+}
+
+.save-button-highlight::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.save-button-highlight:hover::before {
+  left: 100%;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 :deep(.el-card__header) {
@@ -583,8 +754,22 @@ onMounted(() => {
   }
 
   .save-actions {
+    padding: 20px 10px;
+  }
+  
+  .action-buttons {
     flex-direction: column;
     align-items: center;
+    gap: 15px;
+  }
+  
+  .action-buttons .el-button {
+    width: 100%;
+    max-width: 200px;
+  }
+  
+  .changes-warning {
+    padding: 0 10px;
   }
 }
 </style>
