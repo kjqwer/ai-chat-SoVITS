@@ -124,27 +124,14 @@
       <div class="save-actions">
         <!-- 变更提醒 -->
         <div v-if="hasChanges" class="changes-warning">
-          <el-alert
-            title="您有未保存的配置修改"
-            type="warning"
-            :closable="false"
-            show-icon
-            style="margin-bottom: 20px;"
-          >
+          <el-alert title="您有未保存的配置修改" type="warning" :closable="false" show-icon style="margin-bottom: 20px;">
             请点击"保存配置"按钮保存您的修改，否则刷新页面后将丢失所有更改。
           </el-alert>
         </div>
-        
+
         <div class="action-buttons">
-          <el-button 
-            :type="hasChanges ? 'warning' : 'success'" 
-            size="large" 
-            @click="saveConfig" 
-            :loading="saving"
-            :disabled="!hasChanges"
-            :class="{ 'save-button-highlight': hasChanges }"
-            title="保存所有配置修改，或使用快捷键 Ctrl+S"
-          >
+          <el-button :type="hasChanges ? 'warning' : 'success'" size="large" @click="saveConfig" :loading="saving"
+            :disabled="!hasChanges" :class="{ 'save-button-highlight': hasChanges }" title="保存所有配置修改，或使用快捷键 Ctrl+S">
             <el-icon>
               <Check />
             </el-icon>
@@ -155,6 +142,12 @@
               <RefreshLeft />
             </el-icon>
             重置配置
+          </el-button>
+          <el-button type="info" size="large" @click="diagnoseConfig">
+            <el-icon>
+              <Tools />
+            </el-icon>
+            诊断配置
           </el-button>
         </div>
       </div>
@@ -173,15 +166,21 @@
 <script setup>
 import { ref, onMounted, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 import {
   Key,
   Plus,
   User,
   Check,
-  RefreshLeft
+  RefreshLeft,
+  Tools
 } from '@element-plus/icons-vue'
 import ApiConfigDialog from './ApiConfigDialog.vue'
 import PersonaDialog from './PersonaDialog.vue'
+import { useChatStore } from '../stores/chat.js'
+
+// Store引用
+const chatStore = useChatStore()
 
 // 响应式数据
 const apiConfigs = ref([])
@@ -207,7 +206,7 @@ const currentPersona = ref({})
 // 计算是否有变更
 const hasChanges = computed(() => {
   return JSON.stringify(apiConfigs.value) !== JSON.stringify(originalApiConfigs.value) ||
-         JSON.stringify(personas.value) !== JSON.stringify(originalPersonas.value)
+    JSON.stringify(personas.value) !== JSON.stringify(originalPersonas.value)
 })
 
 // 加载配置
@@ -341,12 +340,16 @@ const saveConfig = async () => {
     }
 
     // 构建配置对象
+    const defaultConfig = apiConfigs.value.find(cfg => cfg.isDefault) || apiConfigs.value[0]
     const config = {
       API_CONFIGS: apiConfigs.value.map(cfg => ({
         ...cfg,
         timeout: cfg.timeout * 1000 // 转换为毫秒
       })),
-      AI_CONFIG: apiConfigs.value.find(cfg => cfg.isDefault) || apiConfigs.value[0],
+      AI_CONFIG: {
+        ...defaultConfig,
+        timeout: defaultConfig.timeout * 1000 // 确保AI_CONFIG中的timeout也转换为毫秒
+      },
       DEFAULT_PERSONAS: personas.value
     }
 
@@ -364,6 +367,8 @@ const saveConfig = async () => {
       originalApiConfigs.value = JSON.parse(JSON.stringify(apiConfigs.value))
       originalPersonas.value = JSON.parse(JSON.stringify(personas.value))
       ElMessage.success('配置保存成功')
+      // 重新加载聊天配置
+      await chatStore.reloadConfig()
     } else {
       throw new Error('保存失败')
     }
@@ -401,7 +406,7 @@ const handleApiConfigSave = (config) => {
   } else {
     apiConfigs.value[currentApiIndex.value] = { ...config }
   }
-  
+
   // 提示用户保存配置
   if (hasChanges.value) {
     ElMessage.info('请点击"保存配置"按钮保存您的修改')
@@ -442,7 +447,7 @@ const handlePersonaSave = (persona) => {
   } else {
     personas.value[currentPersonaIndex.value] = { ...persona }
   }
-  
+
   // 提示用户保存配置
   if (hasChanges.value) {
     ElMessage.info('请点击"保存配置"按钮保存您的修改')
@@ -476,6 +481,90 @@ const resetConfig = async () => {
   }
 }
 
+// 诊断配置
+const diagnoseConfig = async () => {
+  try {
+    let diagnosticInfo = '# 配置诊断报告\n\n'
+
+    // 检查API配置
+    diagnosticInfo += '## API配置检查\n'
+    if (apiConfigs.value.length === 0) {
+      diagnosticInfo += '❌ 没有配置任何API\n'
+    } else {
+      diagnosticInfo += `✅ 已配置 ${apiConfigs.value.length} 个API\n`
+
+      apiConfigs.value.forEach((config, index) => {
+        diagnosticInfo += `\n### API配置 ${index + 1}: ${config.name}\n`
+        diagnosticInfo += `- 地址: ${config.baseURL}\n`
+        diagnosticInfo += `- 模型: ${config.model}\n`
+        diagnosticInfo += `- 超时: ${config.timeout}秒 (${config.timeout * 1000}ms)\n`
+        diagnosticInfo += `- 默认配置: ${config.isDefault ? '是' : '否'}\n`
+
+        // 检查API配置问题
+        if (!config.apiKey || config.apiKey === 'your-openai-api-key') {
+          diagnosticInfo += '⚠️ API密钥未设置或使用默认值\n'
+        }
+        if (config.timeout < 10) {
+          diagnosticInfo += '⚠️ 超时时间过短，可能导致请求失败\n'
+        }
+        if (config.timeout > 60) {
+          diagnosticInfo += '⚠️ 超时时间过长，用户体验不佳\n'
+        }
+      })
+    }
+
+    // 检查人格配置
+    diagnosticInfo += '\n## 人格配置检查\n'
+    if (personas.value.length === 0) {
+      diagnosticInfo += '❌ 没有配置任何AI人格\n'
+    } else {
+      diagnosticInfo += `✅ 已配置 ${personas.value.length} 个AI人格\n`
+      personas.value.forEach((persona, index) => {
+        diagnosticInfo += `\n### 人格 ${index + 1}: ${persona.name}\n`
+        diagnosticInfo += `- 描述: ${persona.description}\n`
+        diagnosticInfo += `- 提示词长度: ${persona.prompt?.length || 0} 字符\n`
+
+        if (!persona.prompt || persona.prompt.length < 10) {
+          diagnosticInfo += '⚠️ 提示词过短，可能影响AI表现\n'
+        }
+      })
+    }
+
+    // 检查配置保存状态
+    diagnosticInfo += '\n## 配置状态检查\n'
+    if (hasChanges.value) {
+      diagnosticInfo += '⚠️ 有未保存的配置修改\n'
+    } else {
+      diagnosticInfo += '✅ 所有配置都已保存\n'
+    }
+
+    // 检查常见问题
+    diagnosticInfo += '\n## 常见问题检查\n'
+
+    // 检查超时配置
+    const timeoutIssues = apiConfigs.value.filter(cfg => cfg.timeout <= 1)
+    if (timeoutIssues.length > 0) {
+      diagnosticInfo += '🚨 发现超时配置异常:\n'
+      timeoutIssues.forEach(cfg => {
+        diagnosticInfo += `- "${cfg.name}": ${cfg.timeout}秒 → 这会导致"timeout of ${cfg.timeout * 1000}ms exceeded"错误\n`
+      })
+      diagnosticInfo += '\n**解决方案**: 将超时时间调整为30秒或更长\n'
+    }
+
+    // 显示诊断结果
+    await ElMessageBox.alert(diagnosticInfo, '配置诊断报告', {
+      confirmButtonText: '知道了',
+      type: 'info',
+      dangerouslyUseHTMLString: false,
+      customClass: 'diagnostic-dialog'
+    })
+
+  } catch (error) {
+    ElMessage.error('诊断配置时出错')
+    console.error('配置诊断错误:', error)
+  }
+}
+
 // 工具函数
 const maskApiKey = (apiKey) => {
   if (!apiKey || apiKey.length <= 8) return '••••••••'
@@ -490,7 +579,7 @@ const truncateText = (text, maxLength) => {
 // 组件挂载时加载配置
 onMounted(() => {
   loadConfig()
-  
+
   // 页面离开前检查未保存的配置
   const handleBeforeUnload = (event) => {
     if (hasChanges.value) {
@@ -499,7 +588,7 @@ onMounted(() => {
       return '您有未保存的配置修改，确定要离开吗？'
     }
   }
-  
+
   // 快捷键保存配置 (Ctrl+S)
   const handleKeyDown = (event) => {
     if (event.ctrlKey && event.key === 's') {
@@ -510,10 +599,10 @@ onMounted(() => {
       }
     }
   }
-  
+
   window.addEventListener('beforeunload', handleBeforeUnload)
   document.addEventListener('keydown', handleKeyDown)
-  
+
   // 组件卸载时清理事件监听器
   return () => {
     window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -727,9 +816,11 @@ onMounted(() => {
   0% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.8;
   }
+
   100% {
     opacity: 1;
   }
@@ -745,6 +836,24 @@ onMounted(() => {
   color: #606266;
 }
 
+/* 诊断对话框样式 */
+:deep(.diagnostic-dialog) {
+  max-width: 800px;
+}
+
+:deep(.diagnostic-dialog .el-message-box__content) {
+  max-height: 500px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
 
@@ -756,20 +865,24 @@ onMounted(() => {
   .save-actions {
     padding: 20px 10px;
   }
-  
+
   .action-buttons {
     flex-direction: column;
     align-items: center;
     gap: 15px;
   }
-  
+
   .action-buttons .el-button {
     width: 100%;
     max-width: 200px;
   }
-  
+
   .changes-warning {
     padding: 0 10px;
+  }
+
+  :deep(.diagnostic-dialog) {
+    max-width: 95vw;
   }
 }
 </style>

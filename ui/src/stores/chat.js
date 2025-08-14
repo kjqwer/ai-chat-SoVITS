@@ -111,8 +111,8 @@ export const useChatStore = defineStore("chat", {
 
   actions: {
     // 初始化配置
-    async initializeConfig() {
-      if (this.configLoaded) return;
+    async initializeConfig(forceReload = false) {
+      if (this.configLoaded && !forceReload) return;
 
       await initializeConfig();
 
@@ -137,6 +137,13 @@ export const useChatStore = defineStore("chat", {
       this.migrateAudioData();
 
       this.configLoaded = true;
+    },
+
+    // 重新加载配置
+    async reloadConfig() {
+      this.configLoaded = false;
+      await this.initializeConfig(true);
+      console.log("配置已重新加载");
     },
 
     // 迁移旧的音频数据结构到新的版本结构
