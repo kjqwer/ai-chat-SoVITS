@@ -134,6 +134,7 @@
                   <div v-else-if="message.audioVersions && message.audioVersions.length > 0" class="audio-player">
                     <!-- 当前版本音频播放器 -->
                     <audio v-if="message.currentAudioVersion >= 0 && message.audioVersions[message.currentAudioVersion]"
+                      :key="`${message.id}-${message.currentAudioVersion}`"
                       controls style="width: 100%">
                       <source :src="message.audioVersions[message.currentAudioVersion].url" type="audio/wav">
                     </audio>
