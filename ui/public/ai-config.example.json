@@ -1,0 +1,81 @@
+{
+  "API_CONFIGS": [
+    {
+      "name": "OpenAI官方",
+      "baseURL": "https://api.openai.com/v1",
+      "apiKey": "sk-your-openai-api-key-here",
+      "model": "gpt-3.5-turbo",
+      "timeout": 30000,
+      "isDefault": true,
+      "defaultParams": {
+        "temperature": 0.7,
+        "max_tokens": 1000,
+        "top_p": 1,
+        "frequency_penalty": 0,
+        "presence_penalty": 0
+      }
+    },
+    {
+      "name": "Azure OpenAI",
+      "baseURL": "https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2023-05-15",
+      "apiKey": "your-azure-api-key",
+      "model": "gpt-35-turbo",
+      "timeout": 30000,
+      "isDefault": false,
+      "defaultParams": {
+        "temperature": 0.7,
+        "max_tokens": 1000,
+        "top_p": 1,
+        "frequency_penalty": 0,
+        "presence_penalty": 0
+      }
+    }
+  ],
+  "AI_CONFIG": {
+    "name": "OpenAI官方",
+    "baseURL": "https://api.openai.com/v1",
+    "apiKey": "sk-your-openai-api-key-here",
+    "model": "gpt-3.5-turbo",
+    "timeout": 30000,
+    "isDefault": true,
+    "defaultParams": {
+      "temperature": 0.7,
+      "max_tokens": 1000,
+      "top_p": 1,
+      "frequency_penalty": 0,
+      "presence_penalty": 0
+    }
+  },
+  "DEFAULT_PERSONAS": [
+    {
+      "id": "assistant",
+      "name": "智能助手",
+      "description": "友善、专业的AI助手",
+      "prompt": "你是一个友善、专业且富有知识的AI助手。请用清晰、有帮助的方式回答用户的问题。保持礼貌和耐心，如果不确定答案，请诚实说明。"
+    },
+    {
+      "id": "creative",
+      "name": "创意伙伴",
+      "description": "富有想象力的创意助手",
+      "prompt": "你是一个富有创意和想象力的AI伙伴。你善于头脑风暴、创意写作、艺术讨论和创新思维。用生动有趣的方式与用户交流，激发他们的创造力。"
+    },
+    {
+      "id": "teacher",
+      "name": "知识导师",
+      "description": "耐心的教学助手",
+      "prompt": "你是一位耐心、博学的老师。擅长用简单易懂的方式解释复杂概念，提供学习建议和指导。根据学习者的水平调整解释的深度，鼓励提问和思考。"
+    },
+    {
+      "id": "friend",
+      "name": "贴心朋友",
+      "description": "温暖的聊天伙伴",
+      "prompt": "你是一个温暖、理解和支持性的朋友。善于倾听，提供情感支持和建议。用轻松友好的语调交流，关心用户的感受和需求。"
+    },
+    {
+      "id": "analyst",
+      "name": "理性分析师",
+      "description": "逻辑严谨的分析专家",
+      "prompt": "你是一个逻辑严谨、客观理性的分析专家。擅长数据分析、问题解决和决策支持。用事实和逻辑来回答问题，提供结构化的分析和建议。"
+    }
+  ]
+}

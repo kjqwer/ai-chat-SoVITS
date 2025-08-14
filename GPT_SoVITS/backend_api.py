@@ -488,6 +488,23 @@ async def get_status():
         "temp_dir": temp_dir,
     }
 
+@app.post("/api/save-config")
+async def save_config(request: dict):
+    """保存AI配置到public目录"""
+    try:
+        config_path = os.path.join(dist_path, "ai-config.json")
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        
+        # 保存配置
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(request, f, ensure_ascii=False, indent=2)
+        
+        return {"message": "配置保存成功", "path": config_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
+
 # 前端路由处理
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():

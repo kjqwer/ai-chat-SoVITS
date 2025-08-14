@@ -10,26 +10,19 @@
       <el-card class="setting-card" shadow="never">
         <template #header>
           <div class="card-header">
-            <el-icon><Operation /></el-icon>
+            <el-icon>
+              <Operation />
+            </el-icon>
             <span>模型设置</span>
           </div>
         </template>
-        
+
         <el-form label-width="120px">
           <el-form-item label="SoVITS模型">
-            <el-select
-              v-model="currentSovitsModel"
-              placeholder="请选择模型"
-              style="width: 100%"
-              :loading="apiStore.loading.models"
-              @change="handleModelChange"
-            >
-              <el-option
-                v-for="model in apiStore.sovitsModels"
-                :key="model.name"
-                :label="model.name"
-                :value="model.name"
-              />
+            <el-select v-model="currentSovitsModel" placeholder="请选择模型" style="width: 100%"
+              :loading="apiStore.loading.models" @change="handleModelChange">
+              <el-option v-for="model in apiStore.sovitsModels" :key="model.name" :label="model.name"
+                :value="model.name" />
             </el-select>
             <div class="form-help-text">当前使用的SoVITS模型文件</div>
           </el-form-item>
@@ -40,37 +33,23 @@
       <el-card class="setting-card" shadow="never">
         <template #header>
           <div class="card-header">
-            <el-icon><User /></el-icon>
+            <el-icon>
+              <User />
+            </el-icon>
             <span>角色设置</span>
           </div>
         </template>
-        
+
         <el-form label-width="120px">
           <el-form-item label="当前角色">
-            <el-select
-              v-model="currentCharacter"
-              placeholder="请选择或搜索角色"
-              style="width: 100%"
-              :loading="apiStore.loading.characters || characterSearchLoading"
-              filterable
-              clearable
-              remote
-              reserve-keyword
-              :remote-method="handleCharacterSearch"
-              @change="handleCharacterChange"
-              @clear="handleCharacterClear"
-            >
-              <el-option
-                v-for="character in filteredCharacters"
-                :key="character.name"
-                :label="character.name"
-                :value="character.name"
-              >
+            <el-select v-model="currentCharacter" placeholder="请选择或搜索角色" style="width: 100%"
+              :loading="apiStore.loading.characters || characterSearchLoading" filterable clearable remote
+              reserve-keyword :remote-method="handleCharacterSearch" @change="handleCharacterChange"
+              @clear="handleCharacterClear">
+              <el-option v-for="character in filteredCharacters" :key="character.name" :label="character.name"
+                :value="character.name">
                 <span style="float: left">{{ character.name }}</span>
-                <span
-                  v-if="character.is_current"
-                  style="float: right; color: #67c23a; font-size: 12px;"
-                >
+                <span v-if="character.is_current" style="float: right; color: #67c23a; font-size: 12px;">
                   当前
                 </span>
               </el-option>
@@ -92,20 +71,28 @@
       <el-card class="setting-card" shadow="never">
         <template #header>
           <div class="card-header">
-            <el-icon><Setting /></el-icon>
+            <el-icon>
+              <Setting />
+            </el-icon>
             <span>推理配置</span>
-            <el-button
-              type="primary"
-              size="small"
-              :loading="apiStore.loading.config"
-              @click="saveInferenceConfig"
-              style="margin-left: auto;"
-            >
-              保存配置
-            </el-button>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+              <!-- 变更提醒 -->
+              <el-text v-if="hasConfigChanges" type="warning" size="small" class="config-warning"
+                style="font-size: 12px;">
+                <el-icon>
+                  <Warning />
+                </el-icon>
+                配置已修改，请保存
+              </el-text>
+              <el-button :type="hasConfigChanges ? 'warning' : 'primary'"
+                :class="{ 'save-button-highlight': hasConfigChanges }" size="small" :loading="apiStore.loading.config"
+                :disabled="!hasConfigChanges" @click="saveInferenceConfig" title="点击保存配置，或使用快捷键 Ctrl+S">
+                {{ hasConfigChanges ? '保存配置 *' : '保存配置' }}
+              </el-button>
+            </div>
           </div>
         </template>
-        
+
         <el-form :model="inferenceConfig" label-width="150px" class="inference-form">
           <!-- 语言设置 -->
           <div class="config-section">
@@ -114,12 +101,8 @@
               <el-col :span="12">
                 <el-form-item :label="CONFIG_LABELS.text_lang">
                   <el-select v-model="inferenceConfig.text_lang" style="width: 100%">
-                    <el-option
-                      v-for="option in LANGUAGE_OPTIONS"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
+                    <el-option v-for="option in LANGUAGE_OPTIONS" :key="option.value" :label="option.label"
+                      :value="option.value" />
                   </el-select>
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.text_lang }}</div>
                 </el-form-item>
@@ -127,12 +110,8 @@
               <el-col :span="12">
                 <el-form-item :label="CONFIG_LABELS.prompt_lang">
                   <el-select v-model="inferenceConfig.prompt_lang" style="width: 100%">
-                    <el-option
-                      v-for="option in LANGUAGE_OPTIONS"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
+                    <el-option v-for="option in LANGUAGE_OPTIONS" :key="option.value" :label="option.label"
+                      :value="option.value" />
                   </el-select>
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.prompt_lang }}</div>
                 </el-form-item>
@@ -145,12 +124,8 @@
             <h4>文本处理</h4>
             <el-form-item :label="CONFIG_LABELS.text_split_method">
               <el-select v-model="inferenceConfig.text_split_method" style="width: 100%">
-                <el-option
-                  v-for="option in TEXT_SPLIT_OPTIONS"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
-                />
+                <el-option v-for="option in TEXT_SPLIT_OPTIONS" :key="option.value" :label="option.label"
+                  :value="option.value" />
               </el-select>
               <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.text_split_method }}</div>
             </el-form-item>
@@ -162,40 +137,23 @@
             <el-row :gutter="20">
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.top_k">
-                  <el-slider
-                    v-model="inferenceConfig.top_k"
-                    :min="CONFIG_RANGES.top_k.min"
-                    :max="CONFIG_RANGES.top_k.max"
-                    :step="CONFIG_RANGES.top_k.step"
-                    show-input
-                    style="width: 100%"
-                  />
+                  <el-slider v-model="inferenceConfig.top_k" :min="CONFIG_RANGES.top_k.min"
+                    :max="CONFIG_RANGES.top_k.max" :step="CONFIG_RANGES.top_k.step" show-input style="width: 100%" />
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.top_k }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.top_p">
-                  <el-slider
-                    v-model="inferenceConfig.top_p"
-                    :min="CONFIG_RANGES.top_p.min"
-                    :max="CONFIG_RANGES.top_p.max"
-                    :step="CONFIG_RANGES.top_p.step"
-                    show-input
-                    style="width: 100%"
-                  />
+                  <el-slider v-model="inferenceConfig.top_p" :min="CONFIG_RANGES.top_p.min"
+                    :max="CONFIG_RANGES.top_p.max" :step="CONFIG_RANGES.top_p.step" show-input style="width: 100%" />
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.top_p }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.temperature">
-                  <el-slider
-                    v-model="inferenceConfig.temperature"
-                    :min="CONFIG_RANGES.temperature.min"
-                    :max="CONFIG_RANGES.temperature.max"
-                    :step="CONFIG_RANGES.temperature.step"
-                    show-input
-                    style="width: 100%"
-                  />
+                  <el-slider v-model="inferenceConfig.temperature" :min="CONFIG_RANGES.temperature.min"
+                    :max="CONFIG_RANGES.temperature.max" :step="CONFIG_RANGES.temperature.step" show-input
+                    style="width: 100%" />
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.temperature }}</div>
                 </el-form-item>
               </el-col>
@@ -208,40 +166,25 @@
             <el-row :gutter="20">
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.batch_size">
-                  <el-slider
-                    v-model="inferenceConfig.batch_size"
-                    :min="CONFIG_RANGES.batch_size.min"
-                    :max="CONFIG_RANGES.batch_size.max"
-                    :step="CONFIG_RANGES.batch_size.step"
-                    show-input
-                    style="width: 100%"
-                  />
+                  <el-slider v-model="inferenceConfig.batch_size" :min="CONFIG_RANGES.batch_size.min"
+                    :max="CONFIG_RANGES.batch_size.max" :step="CONFIG_RANGES.batch_size.step" show-input
+                    style="width: 100%" />
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.batch_size }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.speed_factor">
-                  <el-slider
-                    v-model="inferenceConfig.speed_factor"
-                    :min="CONFIG_RANGES.speed_factor.min"
-                    :max="CONFIG_RANGES.speed_factor.max"
-                    :step="CONFIG_RANGES.speed_factor.step"
-                    show-input
-                    style="width: 100%"
-                  />
+                  <el-slider v-model="inferenceConfig.speed_factor" :min="CONFIG_RANGES.speed_factor.min"
+                    :max="CONFIG_RANGES.speed_factor.max" :step="CONFIG_RANGES.speed_factor.step" show-input
+                    style="width: 100%" />
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.speed_factor }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.fragment_interval">
-                  <el-slider
-                    v-model="inferenceConfig.fragment_interval"
-                    :min="CONFIG_RANGES.fragment_interval.min"
-                    :max="CONFIG_RANGES.fragment_interval.max"
-                    :step="CONFIG_RANGES.fragment_interval.step"
-                    show-input
-                    style="width: 100%"
-                  />
+                  <el-slider v-model="inferenceConfig.fragment_interval" :min="CONFIG_RANGES.fragment_interval.min"
+                    :max="CONFIG_RANGES.fragment_interval.max" :step="CONFIG_RANGES.fragment_interval.step" show-input
+                    style="width: 100%" />
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.fragment_interval }}</div>
                 </el-form-item>
               </el-col>
@@ -254,26 +197,17 @@
             <el-row :gutter="20">
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.repetition_penalty">
-                  <el-slider
-                    v-model="inferenceConfig.repetition_penalty"
-                    :min="CONFIG_RANGES.repetition_penalty.min"
-                    :max="CONFIG_RANGES.repetition_penalty.max"
-                    :step="CONFIG_RANGES.repetition_penalty.step"
-                    show-input
-                    style="width: 100%"
-                  />
+                  <el-slider v-model="inferenceConfig.repetition_penalty" :min="CONFIG_RANGES.repetition_penalty.min"
+                    :max="CONFIG_RANGES.repetition_penalty.max" :step="CONFIG_RANGES.repetition_penalty.step" show-input
+                    style="width: 100%" />
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.repetition_penalty }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item :label="CONFIG_LABELS.sample_steps">
                   <el-select v-model="inferenceConfig.sample_steps" style="width: 100%">
-                    <el-option
-                      v-for="option in SAMPLE_STEPS_OPTIONS"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
+                    <el-option v-for="option in SAMPLE_STEPS_OPTIONS" :key="option.value" :label="option.label"
+                      :value="option.value" />
                   </el-select>
                   <div class="form-help-text">{{ CONFIG_DESCRIPTIONS.sample_steps }}</div>
                 </el-form-item>
@@ -320,67 +254,70 @@
       <el-card class="setting-card" shadow="never">
         <template #header>
           <div class="card-header">
-            <el-icon><Microphone /></el-icon>
+            <el-icon>
+              <Microphone />
+            </el-icon>
             <span>文本转语音测试</span>
           </div>
         </template>
-        
+
         <el-form label-width="120px">
           <el-form-item label="测试文本">
-            <el-input
-              v-model="testText"
-              type="textarea"
-              :rows="4"
-              placeholder="请输入要合成的文本..."
-              maxlength="500"
-              show-word-limit
-            />
+            <el-input v-model="testText" type="textarea" :rows="4" placeholder="请输入要合成的文本..." maxlength="500"
+              show-word-limit />
           </el-form-item>
-          
+
           <el-form-item>
-            <el-button
-              type="primary"
-              :loading="apiStore.loading.tts"
-              :disabled="!testText.trim() || !apiStore.currentCharacter"
-              @click="handleTTS"
-            >
-              <el-icon><VideoPlay /></el-icon>
+            <el-button type="primary" :loading="apiStore.loading.tts"
+              :disabled="!testText.trim() || !apiStore.currentCharacter" @click="handleTTS">
+              <el-icon>
+                <VideoPlay />
+              </el-icon>
               生成语音
             </el-button>
-            
-            <el-button
-              v-if="audioUrl"
-              type="success"
-              @click="playAudio"
-            >
-              <el-icon><VideoPlay /></el-icon>
+
+            <!-- 未保存配置提醒 -->
+            <el-button v-if="hasConfigChanges" type="warning" size="small" @click="saveInferenceConfig"
+              style="margin-left: 10px;">
+              <el-icon>
+                <Warning />
+              </el-icon>
+              先保存配置
+            </el-button>
+
+            <el-button v-if="audioUrl" type="success" @click="playAudio">
+              <el-icon>
+                <VideoPlay />
+              </el-icon>
               播放
             </el-button>
-            
-            <el-button
-              v-if="audioUrl"
-              @click="downloadAudio"
-            >
-              <el-icon><Download /></el-icon>
+
+            <el-button v-if="audioUrl" @click="downloadAudio">
+              <el-icon>
+                <Download />
+              </el-icon>
               下载
             </el-button>
           </el-form-item>
+
+          <!-- 配置提醒文本 -->
+          <el-form-item v-if="hasConfigChanges">
+            <el-alert title="提醒" type="warning" :closable="false" show-icon style="margin-top: 10px;">
+              您的推理配置已修改但未保存，可能影响语音生成效果。建议先保存配置再进行测试。
+            </el-alert>
+          </el-form-item>
         </el-form>
-        
+
         <!-- 音频播放器 -->
         <div v-if="audioUrl" style="margin-top: 15px;">
           <div style="margin-bottom: 8px; color: #606266; font-size: 14px;">
-            <el-icon><Microphone /></el-icon>
+            <el-icon>
+              <Microphone />
+            </el-icon>
             生成的音频文件 ({{ audioGeneratedTime ? formatDateTime(audioGeneratedTime) : '' }})
           </div>
-          <audio
-            ref="audioPlayer"
-            controls
-            style="width: 100%;"
-            @loadstart="handleAudioLoadStart"
-            @canplay="handleAudioCanPlay"
-            @error="handleAudioError"
-          >
+          <audio ref="audioPlayer" controls style="width: 100%;" @loadstart="handleAudioLoadStart"
+            @canplay="handleAudioCanPlay" @error="handleAudioError">
             <source :src="audioUrl" type="audio/wav">
             您的浏览器不支持音频播放。
           </audio>
@@ -393,6 +330,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 import { useApiStore } from '../stores/api.js'
 import {
   LANGUAGE_OPTIONS,
@@ -409,6 +347,7 @@ const apiStore = useApiStore()
 const currentSovitsModel = ref('')
 const currentCharacter = ref('')
 const inferenceConfig = ref({})
+const originalConfig = ref({}) // 新增：保存原始配置用于比较
 const testText = ref('你好，这是一个测试语音合成的文本。')
 const audioUrl = ref('')
 const audioPlayer = ref(null)
@@ -421,11 +360,17 @@ const filteredCharacters = ref([])
 // 音频生成时间
 const audioGeneratedTime = ref(null)
 
+// 新增：计算配置是否有变更
+const hasConfigChanges = computed(() => {
+  return JSON.stringify(inferenceConfig.value) !== JSON.stringify(originalConfig.value)
+})
+
 // 监听store中的推理配置变化
 watch(
   () => apiStore.inferenceConfig,
   (newConfig) => {
     inferenceConfig.value = { ...newConfig }
+    originalConfig.value = { ...newConfig } // 同时更新原始配置
   },
   { deep: true, immediate: true }
 )
@@ -461,6 +406,8 @@ watch(
 const handleModelChange = async (modelName) => {
   try {
     await apiStore.setSovitsModel(modelName)
+    // 刷新系统状态
+    await apiStore.fetchSystemStatus()
     ElMessage.success('模型设置成功')
   } catch (error) {
     ElMessage.error(`模型设置失败: ${error.message}`)
@@ -471,6 +418,8 @@ const handleModelChange = async (modelName) => {
 const handleCharacterChange = async (characterName) => {
   try {
     await apiStore.setCharacter(characterName)
+    // 刷新系统状态
+    await apiStore.fetchSystemStatus()
     ElMessage.success('角色设置成功')
   } catch (error) {
     ElMessage.error(`角色设置失败: ${error.message}`)
@@ -489,7 +438,7 @@ const filterCharacters = (query) => {
     filteredCharacters.value = [...apiStore.characters]
     return
   }
-  
+
   const lowerQuery = query.toLowerCase()
   filteredCharacters.value = apiStore.characters.filter(character =>
     character.name.toLowerCase().includes(lowerQuery)
@@ -507,6 +456,10 @@ const handleCharacterClear = () => {
 const saveInferenceConfig = async () => {
   try {
     await apiStore.updateInferenceConfig(inferenceConfig.value)
+    // 保存成功后更新原始配置，清除变更状态
+    originalConfig.value = { ...inferenceConfig.value }
+    // 刷新系统状态（虽然推理配置不直接影响系统状态，但保持一致性）
+    await apiStore.fetchSystemStatus()
     ElMessage.success('配置保存成功')
   } catch (error) {
     ElMessage.error(`配置保存失败: ${error.message}`)
@@ -519,24 +472,51 @@ const handleTTS = async () => {
     ElMessage.warning('请输入测试文本')
     return
   }
-  
+
   if (!apiStore.currentCharacter) {
     ElMessage.warning('请先设置角色')
     return
   }
 
+  // 检查是否有未保存的配置
+  if (hasConfigChanges.value) {
+    try {
+      await ElMessageBox.confirm(
+        '检测到您有未保存的推理配置，这可能影响语音生成效果。是否要先保存配置？',
+        '配置未保存',
+        {
+          confirmButtonText: '先保存配置',
+          cancelButtonText: '直接生成',
+          type: 'warning',
+          distinguishCancelAndClose: true
+        }
+      )
+      // 用户选择先保存配置
+      await saveInferenceConfig()
+      // 配置保存成功后继续生成
+    } catch (action) {
+      if (action === 'cancel') {
+        // 用户选择直接生成，显示警告提示
+        ElMessage.warning('正在使用未保存的配置进行语音生成')
+      } else {
+        // 用户关闭了对话框
+        return
+      }
+    }
+  }
+
   try {
     const audioBlob = await apiStore.textToSpeech(testText.value)
-    
+
     // 清理旧的音频URL
     if (audioUrl.value) {
       URL.revokeObjectURL(audioUrl.value)
     }
-    
+
     // 创建新的音频URL
     audioUrl.value = URL.createObjectURL(audioBlob)
     audioGeneratedTime.value = new Date()
-    
+
     // 等待DOM更新后重新加载音频
     await nextTick()
     if (audioPlayer.value) {
@@ -544,7 +524,7 @@ const handleTTS = async () => {
       // 可选：自动播放新生成的音频
       // audioPlayer.value.play()
     }
-    
+
     ElMessage.success('语音生成成功！点击播放按钮收听')
   } catch (error) {
     ElMessage.error(`语音生成失败: ${error.message}`)
@@ -595,7 +575,32 @@ const formatDateTime = (date) => {
 
 // 组件卸载时清理音频URL
 onMounted(() => {
+  // 页面离开前检查未保存的配置
+  const handleBeforeUnload = (event) => {
+    if (hasConfigChanges.value) {
+      event.preventDefault()
+      event.returnValue = '您有未保存的推理配置，确定要离开吗？'
+      return '您有未保存的推理配置，确定要离开吗？'
+    }
+  }
+
+  // 快捷键保存配置 (Ctrl+S)
+  const handleKeyDown = (event) => {
+    if (event.ctrlKey && event.key === 's') {
+      event.preventDefault()
+      if (hasConfigChanges.value && !apiStore.loading.config) {
+        saveInferenceConfig()
+        ElMessage.info('使用快捷键 Ctrl+S 保存配置')
+      }
+    }
+  }
+
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  document.addEventListener('keydown', handleKeyDown)
+
   return () => {
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+    document.removeEventListener('keydown', handleKeyDown)
     if (audioUrl.value) {
       URL.revokeObjectURL(audioUrl.value)
     }
@@ -703,4 +708,43 @@ onMounted(() => {
 :deep(.el-switch) {
   margin-right: 10px;
 }
-</style> 
+
+/* 配置变更提醒样式 */
+.config-warning {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.save-button-highlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.save-button-highlight::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.save-button-highlight:hover::before {
+  left: 100%;
+}
+</style>

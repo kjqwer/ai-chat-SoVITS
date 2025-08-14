@@ -3,7 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useApiStore } from './stores/api.js'
 import SettingsPage from './components/SettingsPage.vue'
 import ChatPage from './components/Page2.vue'
-import { Setting, ChatDotRound } from '@element-plus/icons-vue'
+import ConfigPage from './components/ConfigPage.vue'
+import { Setting, ChatDotRound, Tools } from '@element-plus/icons-vue'
 
 const apiStore = useApiStore()
 
@@ -37,26 +38,31 @@ onMounted(async () => {
         <div class="sidebar-header">
           <h2 style="color: white; text-align: center; margin: 20px 0;">GPT-SoVITS</h2>
         </div>
-        
-        <el-menu
-          :default-active="activeMenu"
-          class="sidebar-menu"
-          background-color="#304156"
-          text-color="#bfcbd9"
-          active-text-color="#409EFF"
-          @select="handleMenuSelect"
-        >
+
+        <el-menu :default-active="activeMenu" class="sidebar-menu" background-color="#304156" text-color="#bfcbd9"
+          active-text-color="#409EFF" @select="handleMenuSelect">
           <el-menu-item index="settings">
-            <el-icon><Setting /></el-icon>
+            <el-icon>
+              <Setting />
+            </el-icon>
             <span>设置</span>
           </el-menu-item>
-          
+
           <el-menu-item index="page2">
-            <el-icon><ChatDotRound /></el-icon>
+            <el-icon>
+              <ChatDotRound />
+            </el-icon>
             <span>AI对话</span>
           </el-menu-item>
+
+          <el-menu-item index="config">
+            <el-icon>
+              <Tools />
+            </el-icon>
+            <span>配置管理</span>
+          </el-menu-item>
         </el-menu>
-        
+
         <!-- 系统状态显示 -->
         <div class="system-status" v-if="systemStatus">
           <el-divider style="border-color: #445266;" />
@@ -86,10 +92,13 @@ onMounted(async () => {
         <div class="main-content">
           <!-- 设置页面 -->
           <SettingsPage v-if="activeMenu === 'settings'" />
-          
+
           <!-- AI对话页面 -->
           <ChatPage v-else-if="activeMenu === 'page2'" />
-          
+
+          <!-- 配置管理页面 -->
+          <ConfigPage v-else-if="activeMenu === 'config'" />
+
           <!-- 默认页面 -->
           <div v-else class="welcome-page">
             <el-empty description="请选择左侧菜单项" />
@@ -97,15 +106,10 @@ onMounted(async () => {
         </div>
       </el-main>
     </el-container>
-    
+
     <!-- 全局加载状态 -->
-    <el-loading
-      v-loading="isLoading"
-      element-loading-text="加载中..."
-      element-loading-background="rgba(0, 0, 0, 0.3)"
-      :element-loading-lock="true"
-      v-if="false"
-    />
+    <el-loading v-loading="isLoading" element-loading-text="加载中..." element-loading-background="rgba(0, 0, 0, 0.3)"
+      :element-loading-lock="true" v-if="false" />
   </div>
 </template>
 

@@ -7,7 +7,7 @@
 ### 1. 启动服务
 ```bash
 
-# 直接运行（运行前打包ui，生成dist）
+# 直接运行（运行前打包ui，生成dist，或者直接解压ui里的dist即可）
 python GPT_SoVITS/backend_api.py
 
 # 或使用批处理文件（runtime运行时，模型和音频请去官方包那里下载，如果只是想使用语音合成就改为推理bat）
