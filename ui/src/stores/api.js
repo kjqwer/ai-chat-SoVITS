@@ -23,6 +23,13 @@ export const useApiStore = defineStore("api", {
     currentCharacter: null,
     currentCharacterAudio: null,
 
+    // ASR相关
+    asrModelInfo: null,
+    asrModelStatus: {},
+    asrConfig: {},
+    vadStatus: null,
+    vadConfig: {},
+
     // 系统状态
     systemStatus: null,
 
@@ -51,6 +58,8 @@ export const useApiStore = defineStore("api", {
       characters: false,
       tts: false,
       config: false,
+      asr: false,
+      vad: false,
     },
 
     // 错误信息
@@ -71,6 +80,23 @@ export const useApiStore = defineStore("api", {
     // 检查是否有加载中的请求
     isLoading: (state) => {
       return Object.values(state.loading).some((loading) => loading);
+    },
+
+    // ASR相关getters
+    isAsrModelLoaded: (state) => {
+      return state.asrModelInfo?.is_loaded || false;
+    },
+
+    isFunAsrAvailable: (state) => {
+      return state.asrModelInfo?.funasr_available || false;
+    },
+
+    isVadAvailable: (state) => {
+      return state.asrModelInfo?.vad_available || false;
+    },
+
+    isVadEnabled: (state) => {
+      return state.asrModelInfo?.vad_enabled || false;
     },
   },
 
@@ -261,6 +287,391 @@ export const useApiStore = defineStore("api", {
     // 清除所有错误
     clearAllErrors() {
       this.errors = {};
+    },
+
+    // ==================== ASR 相关方法 ====================
+
+    // 获取ASR模型信息
+    async fetchAsrModelInfo() {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const response = await api.get("/asr/model/info");
+        this.asrModelInfo = response.data;
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // 获取ASR模型状态
+    async fetchAsrModelStatus() {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const response = await api.get("/asr/models/status");
+        this.asrModelStatus = response.data;
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // 获取ASR配置
+    async fetchAsrConfig() {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const response = await api.get("/asr/models/config");
+        this.asrConfig = response.data;
+        this.vadConfig = response.data.vad || {};
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // 加载ASR模型
+    async loadAsrModel() {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const response = await api.post("/asr/model/load");
+        
+        // 刷新模型信息
+        await this.fetchAsrModelInfo();
+        
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // 卸载ASR模型
+    async unloadAsrModel() {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const response = await api.post("/asr/model/unload");
+        
+        // 刷新模型信息
+        await this.fetchAsrModelInfo();
+        
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // 语音识别 - 文件上传
+    async recognizeAudioFile(file, mode = "normal") {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const formData = new FormData();
+        
+        // 根据模式选择端点和参数
+        let endpoint = "/asr/recognize/file";
+        if (mode === "vad") {
+          endpoint = "/asr/recognize/vad";
+          formData.append("file", file);
+          formData.append("return_segments", "true");
+        } else {
+          formData.append("audio_file", file);
+        }
+
+        const response = await api.post(endpoint, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // 语音识别 - Blob数据
+    async recognizeAudioBlob(audioBlob, fileName = "audio.wav", mode = "normal") {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const formData = new FormData();
+        
+        // 根据模式选择端点和参数
+        let endpoint = "/asr/recognize/file";
+        if (mode === "vad") {
+          endpoint = "/asr/recognize/vad";
+          formData.append("file", audioBlob, fileName);
+          formData.append("return_segments", "true");
+        } else {
+          formData.append("audio_file", audioBlob, fileName);
+        }
+
+        const response = await api.post(endpoint, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // ==================== VAD 相关方法 ====================
+
+    // 获取VAD状态
+    async fetchVadStatus() {
+      try {
+        this.loading.vad = true;
+        this.errors.vad = null;
+
+        const response = await api.get("/asr/vad/health");
+        this.vadStatus = response.data;
+        return response.data;
+      } catch (error) {
+        this.errors.vad = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.vad = false;
+      }
+    },
+
+    // VAD检测语音片段
+    async detectVadSegments(file, options = {}) {
+      try {
+        this.loading.vad = true;
+        this.errors.vad = null;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        // 添加VAD参数
+        if (options.threshold !== undefined) {
+          formData.append("threshold", options.threshold.toString());
+        }
+        if (options.min_speech_duration_ms !== undefined) {
+          formData.append("min_speech_duration_ms", options.min_speech_duration_ms.toString());
+        }
+        if (options.max_speech_duration_s !== undefined) {
+          formData.append("max_speech_duration_s", options.max_speech_duration_s.toString());
+        }
+        if (options.min_silence_duration_ms !== undefined) {
+          formData.append("min_silence_duration_ms", options.min_silence_duration_ms.toString());
+        }
+        if (options.speech_pad_ms !== undefined) {
+          formData.append("speech_pad_ms", options.speech_pad_ms.toString());
+        }
+
+        const response = await api.post("/asr/vad/detect", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        return response.data;
+      } catch (error) {
+        this.errors.vad = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.vad = false;
+      }
+    },
+
+    // VAD分割音频
+    async splitAudioByVad(file, outputFormat = "wav") {
+      try {
+        this.loading.vad = true;
+        this.errors.vad = null;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("output_format", outputFormat);
+
+        const response = await api.post("/asr/vad/split", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        return response.data;
+      } catch (error) {
+        this.errors.vad = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.vad = false;
+      }
+    },
+
+    // 更新VAD配置
+    async updateVadConfig(vadConfig) {
+      try {
+        this.loading.vad = true;
+        this.errors.vad = null;
+
+        // 更新完整的ASR配置，包括VAD部分
+        const newAsrConfig = {
+          ...this.asrConfig,
+          vad: vadConfig
+        };
+
+        const response = await api.post("/asr/config/update", newAsrConfig);
+        
+        // 更新本地状态
+        this.asrConfig = response.data;
+        this.vadConfig = vadConfig;
+        
+        // 刷新模型信息以获取最新的VAD状态
+        await this.fetchAsrModelInfo();
+
+        return response.data;
+      } catch (error) {
+        this.errors.vad = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.vad = false;
+      }
+    },
+
+    // ==================== ASR 管理方法 ====================
+
+    // 迁移模型
+    async migrateAsrModels(copyMode = true) {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const response = await api.post(`/asr/models/migrate?copy_mode=${copyMode}`);
+        
+        // 刷新模型状态
+        await this.fetchAsrModelStatus();
+        await this.fetchAsrConfig();
+        
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // 清理缓存
+    async cleanAsrCache() {
+      try {
+        this.loading.asr = true;
+        this.errors.asr = null;
+
+        const response = await api.post("/asr/models/clean_cache");
+        
+        // 刷新模型状态
+        await this.fetchAsrModelStatus();
+        
+        return response.data;
+      } catch (error) {
+        this.errors.asr = error.response?.data?.detail || error.message;
+        throw error;
+      } finally {
+        this.loading.asr = false;
+      }
+    },
+
+    // ==================== 便捷方法 ====================
+
+    // 初始化ASR数据
+    async initializeAsrData() {
+      try {
+        await Promise.all([
+          this.fetchAsrModelInfo(),
+          this.fetchAsrModelStatus(),
+          this.fetchAsrConfig(),
+          this.fetchVadStatus(),
+        ]);
+      } catch (error) {
+        console.error("Failed to initialize ASR data:", error);
+      }
+    },
+
+    // 刷新所有ASR状态
+    async refreshAsrStatus() {
+      try {
+        await Promise.all([
+          this.fetchAsrModelInfo(),
+          this.fetchAsrModelStatus(),
+          this.fetchAsrConfig(),
+          this.fetchVadStatus(),
+        ]);
+      } catch (error) {
+        console.error("Failed to refresh ASR status:", error);
+        throw error;
+      }
+    },
+
+    // 检查ASR是否就绪
+    async checkAsrReady() {
+      try {
+        await this.fetchAsrModelInfo();
+        return this.isAsrModelLoaded && this.isFunAsrAvailable;
+      } catch (error) {
+        console.error("Failed to check ASR readiness:", error);
+        return false;
+      }
+    },
+
+    // 快速语音识别 (自动选择最佳模式)
+    async quickRecognize(audioInput, options = {}) {
+      try {
+        // 检查ASR是否就绪
+        if (!await this.checkAsrReady()) {
+          throw new Error("ASR模型未就绪，请先加载模型");
+        }
+
+        // 自动选择识别模式
+        const mode = this.isVadEnabled && options.useVad !== false ? "vad" : "normal";
+        
+        // 根据输入类型选择方法
+        if (audioInput instanceof File) {
+          return await this.recognizeAudioFile(audioInput, mode);
+        } else if (audioInput instanceof Blob) {
+          const fileName = options.fileName || "audio.wav";
+          return await this.recognizeAudioBlob(audioInput, fileName, mode);
+        } else {
+          throw new Error("不支持的音频输入类型");
+        }
+      } catch (error) {
+        throw error;
+      }
     },
   },
 });

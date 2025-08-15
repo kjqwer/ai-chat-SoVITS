@@ -1,12 +1,12 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Microphone, 
-  Upload, 
-  Download, 
-  Setting, 
-  RefreshRight, 
+import {
+  Microphone,
+  Upload,
+  Download,
+  Setting,
+  RefreshRight,
   Delete,
   CircleCheck,
   CircleClose,
@@ -287,7 +287,7 @@ const handleFileUpload = async (file) => {
     console.log(`实际文件对象:`, actualFile)
 
     const formData = new FormData()
-    
+
     // 根据模式选择 API 端点和参数
     let endpoint = `${API_BASE}/recognize/file`
     let message = '正在识别音频，请稍候...'
@@ -318,7 +318,7 @@ const handleFileUpload = async (file) => {
       try {
         const result = JSON.parse(text)
         console.log('识别结果:', result) // 添加调试信息
-        
+
         if (result.success) {
           recognitionResult.value = result.text
 
@@ -330,7 +330,7 @@ const handleFileUpload = async (file) => {
               processing_method: result.processing_method,
               detailed_results: result.detailed_results
             })
-            
+
             // 检查是否有VAD相关数据
             if (result.vad_segments !== undefined) {
               vadResult.value = `VAD分段识别完成\n` +
@@ -627,7 +627,7 @@ const processRecordedAudio = async (audioBlob, fileExtension = 'webm') => {
     }
 
     const formData = new FormData()
-    
+
     // 根据模式选择 API 端点和参数 (录音也支持VAD)
     let endpoint = `${API_BASE}/recognize/file`
     let message = '正在识别录音，请稍候...'
@@ -658,7 +658,7 @@ const processRecordedAudio = async (audioBlob, fileExtension = 'webm') => {
       try {
         const result = JSON.parse(text)
         console.log('录音识别结果:', result) // 添加调试信息
-        
+
         if (result.success) {
           recognitionResult.value = result.text
 
@@ -670,7 +670,7 @@ const processRecordedAudio = async (audioBlob, fileExtension = 'webm') => {
               processing_method: result.processing_method,
               detailed_results: result.detailed_results
             })
-            
+
             // 检查是否有VAD相关数据
             if (result.vad_segments !== undefined) {
               vadResult.value = `VAD分段识别完成\n` +
@@ -788,7 +788,7 @@ const audioBufferToWav = (buffer) => {
 // 组件挂载时初始化
 onMounted(async () => {
   await refreshAll()
-  
+
   // 调试VAD状态
   console.log('组件加载完成时的状态:')
   console.log('vadAvailable:', vadAvailable.value)

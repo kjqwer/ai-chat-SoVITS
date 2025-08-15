@@ -85,8 +85,17 @@
             </div>
           </div>
           <div class="chat-controls">
-            <el-switch v-model="chatStore.autoGenerateAudio" active-text="自动语音" inactive-text=""
-              @change="chatStore.toggleAutoGenerateAudio" />
+            <div class="control-group">
+              <el-switch v-model="speechRecognitionEnabled" active-text="语音识别" inactive-text="" size="small" />
+            </div>
+            <div class="control-group">
+              <el-switch v-model="chatStore.autoGenerateAudio" active-text="自动语音" inactive-text="" size="small"
+                @change="chatStore.toggleAutoGenerateAudio" />
+            </div>
+            <div class="control-group">
+              <el-switch v-model="autoPlayAudio" active-text="自动播放" inactive-text="" size="small"
+                @change="toggleAutoPlayAudio" />
+            </div>
           </div>
         </div>
 
@@ -134,8 +143,7 @@
                   <div v-else-if="message.audioVersions && message.audioVersions.length > 0" class="audio-player">
                     <!-- 当前版本音频播放器 -->
                     <audio v-if="message.currentAudioVersion >= 0 && message.audioVersions[message.currentAudioVersion]"
-                      :key="`${message.id}-${message.currentAudioVersion}`"
-                      controls style="width: 100%">
+                      :key="`${message.id}-${message.currentAudioVersion}`" controls style="width: 100%">
                       <source :src="message.audioVersions[message.currentAudioVersion].url" type="audio/wav">
                     </audio>
 
@@ -228,12 +236,39 @@
         <!-- 输入区域 -->
         <div class="input-area">
           <div class="input-container">
-            <el-input v-model="inputMessage" type="textarea" :rows="3" placeholder="输入你的消息..."
-              @keydown.ctrl.enter="sendMessage" :disabled="chatStore.loading.sendMessage" />
+            <div class="input-with-voice">
+              <el-input v-model="inputMessage" type="textarea" :rows="3" placeholder="输入你的消息或点击麦克风按钮录音..."
+                @keydown.ctrl.enter="sendMessage" :disabled="chatStore.loading.sendMessage || isRecording" />
+
+              <!-- 语音输入按钮 -->
+              <div class="voice-input-button" v-if="speechRecognitionEnabled">
+                <el-button :type="isRecording ? 'danger' : 'default'" :icon="isRecording ? VideoPause : Microphone"
+                  @click="isRecording ? stopRecording() : startRecording()" :loading="apiStore.loading.asr" circle
+                  size="large" class="record-button">
+                </el-button>
+
+                <!-- 录音时间显示 -->
+                <div v-if="isRecording" class="recording-time">
+                  <el-icon class="recording-icon">
+                    <Microphone />
+                  </el-icon>
+                  {{ formatRecordingTime(recordingTime) }}
+                </div>
+              </div>
+            </div>
+
             <div class="input-actions">
-              <div class="input-hint">Ctrl + Enter 发送</div>
+              <div class="input-hint">
+                <span>Ctrl + Enter 发送</span>
+                <span v-if="speechRecognitionEnabled && !isRecording" class="voice-hint">
+                  • 点击麦克风录音
+                </span>
+                <span v-if="isRecording" class="recording-hint">
+                  正在录音中，再次点击停止
+                </span>
+              </div>
               <el-button type="primary" @click="sendMessage" :loading="chatStore.loading.sendMessage"
-                :disabled="!inputMessage.trim()">
+                :disabled="!inputMessage.trim() || isRecording">
                 <el-icon>
                   <Position />
                 </el-icon>
@@ -274,9 +309,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useChatStore } from '../stores/chat.js'
+import { useApiStore } from '../stores/api.js'
 import {
   Plus,
   More,
@@ -291,10 +327,13 @@ import {
   DocumentCopy,
   Refresh,
   ArrowLeft,
-  Position
+  Position,
+  VideoPause,
+  VideoPlay
 } from '@element-plus/icons-vue'
 
 const chatStore = useChatStore()
+const apiStore = useApiStore()
 
 // 响应式数据
 const inputMessage = ref('')
@@ -304,6 +343,16 @@ const fileInput = ref(null)
 const showExportDialog = ref(false)
 const selectedConversations = ref([])
 const selectAllConversations = ref(false)
+
+// 语音识别相关状态
+const isRecording = ref(false)
+const mediaRecorder = ref(null)
+const audioChunks = ref([])
+const recordingTime = ref(0)
+const recordingTimer = ref(null)
+const speechRecognitionEnabled = ref(true)
+const autoPlayAudio = ref(true)
+const currentPlayingAudio = ref(null)
 
 // 计算属性
 const currentConversation = computed(() => chatStore.currentConversation)
@@ -356,12 +405,40 @@ const sendMessage = async () => {
   if (!inputMessage.value.trim()) return
 
   try {
-    await chatStore.sendMessage(inputMessage.value)
+    const messageText = inputMessage.value
+    await chatStore.sendMessage(messageText)
     inputMessage.value = ''
 
     // 滚动到底部
     await nextTick()
     scrollToBottom()
+
+    // 如果开启了自动语音生成和自动播放，监听新消息的音频生成
+    if (chatStore.autoGenerateAudio && autoPlayAudio.value) {
+      const currentConv = chatStore.currentConversation
+      if (currentConv && currentConv.messages.length > 0) {
+        const lastMessage = currentConv.messages[currentConv.messages.length - 1]
+
+        // 如果是AI消息且有音频生成
+        if (lastMessage.role === 'assistant') {
+          // 等待音频生成完成后自动播放
+          const checkAudioGeneration = () => {
+            if (lastMessage.audioVersions?.length > 0 && !lastMessage.audioGenerating) {
+              const audioUrl = lastMessage.audioVersions[0]?.url
+              if (audioUrl) {
+                autoPlayGeneratedAudio(audioUrl)
+              }
+            } else if (lastMessage.audioGenerating) {
+              // 如果还在生成中，继续等待
+              setTimeout(checkAudioGeneration, 500)
+            }
+          }
+
+          // 延迟检查，给音频生成一些时间
+          setTimeout(checkAudioGeneration, 1000)
+        }
+      }
+    }
   } catch (error) {
     ElMessage.error(`发送消息失败: ${error.message}`)
   }
@@ -372,6 +449,21 @@ const generateAudio = async (conversationId, messageId, isRegenerate = false) =>
   try {
     await chatStore.generateMessageAudio(conversationId, messageId, isRegenerate)
     ElMessage.success('语音生成成功')
+
+    // 如果开启了自动播放，播放生成的音频
+    if (autoPlayAudio.value) {
+      const message = chatStore.conversations
+        .find(conv => conv.id === conversationId)?.messages
+        .find(msg => msg.id === messageId)
+
+      if (message?.audioVersions?.length > 0) {
+        const currentVersion = message.currentAudioVersion >= 0 ? message.currentAudioVersion : 0
+        const audioUrl = message.audioVersions[currentVersion]?.url
+        if (audioUrl) {
+          autoPlayGeneratedAudio(audioUrl)
+        }
+      }
+    }
   } catch (error) {
     ElMessage.error('语音生成失败')
   }
@@ -565,6 +657,231 @@ const formatTime = (timestamp) => {
   }
 }
 
+// ==================== 语音识别相关方法 ====================
+
+// 开始录音
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true
+      }
+    })
+
+    // 选择音频格式
+    let mimeType = 'audio/webm;codecs=opus'
+    let fileExtension = 'webm'
+
+    if (MediaRecorder.isTypeSupported('audio/wav')) {
+      mimeType = 'audio/wav'
+      fileExtension = 'wav'
+    } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+      mimeType = 'audio/webm;codecs=opus'
+      fileExtension = 'webm'
+    } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+      mimeType = 'audio/ogg;codecs=opus'
+      fileExtension = 'ogg'
+    }
+
+    mediaRecorder.value = new MediaRecorder(stream, { mimeType })
+    audioChunks.value = []
+
+    mediaRecorder.value.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunks.value.push(event.data)
+      }
+    }
+
+    mediaRecorder.value.onstop = async () => {
+      const audioBlob = new Blob(audioChunks.value, { type: mimeType })
+      await processRecordedAudio(audioBlob, fileExtension)
+
+      // 停止所有音频轨道
+      stream.getTracks().forEach(track => track.stop())
+    }
+
+    mediaRecorder.value.start()
+    isRecording.value = true
+    recordingTime.value = 0
+
+    // 开始计时
+    recordingTimer.value = setInterval(() => {
+      recordingTime.value++
+    }, 1000)
+
+    ElMessage.success('开始录音')
+  } catch (error) {
+    console.error('录音启动失败:', error)
+    ElMessage.error('无法访问麦克风，请检查权限设置')
+  }
+}
+
+// 停止录音
+const stopRecording = () => {
+  if (mediaRecorder.value && isRecording.value) {
+    mediaRecorder.value.stop()
+    isRecording.value = false
+
+    if (recordingTimer.value) {
+      clearInterval(recordingTimer.value)
+      recordingTimer.value = null
+    }
+
+    ElMessage.info('录音已停止，正在处理...')
+  }
+}
+
+// 处理录制的音频
+const processRecordedAudio = async (audioBlob, fileExtension = 'webm') => {
+  try {
+    // 检查音频文件大小
+    if (audioBlob.size === 0) {
+      throw new Error('录音文件为空，请重新录音')
+    }
+
+    // 转换音频格式（如果需要）
+    let finalBlob = audioBlob
+    let fileName = `recording.${fileExtension}`
+
+    if (fileExtension === 'webm') {
+      try {
+        finalBlob = await convertWebMToWAV(audioBlob)
+        fileName = 'recording.wav'
+      } catch (convertError) {
+        console.warn('音频转换失败，使用原始格式:', convertError)
+      }
+    }
+
+    // 使用API store进行语音识别
+    const result = await apiStore.recognizeAudioBlob(finalBlob, fileName, 'normal')
+
+    if (result.success && result.text) {
+      // 将识别结果填入输入框
+      inputMessage.value = result.text
+      ElMessage.success('语音识别完成')
+    } else {
+      throw new Error(result.detail || '识别失败')
+    }
+  } catch (error) {
+    console.error('语音识别失败:', error)
+    ElMessage.error(`语音识别失败: ${error.message}`)
+  }
+}
+
+// WebM转WAV的辅助函数
+const convertWebMToWAV = async (webmBlob) => {
+  return new Promise((resolve, reject) => {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const fileReader = new FileReader()
+
+    fileReader.onload = async (event) => {
+      try {
+        const arrayBuffer = event.target.result
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+
+        // 转换为WAV格式
+        const wavBuffer = audioBufferToWav(audioBuffer)
+        const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' })
+        resolve(wavBlob)
+      } catch (error) {
+        reject(error)
+      }
+    }
+
+    fileReader.onerror = reject
+    fileReader.readAsArrayBuffer(webmBlob)
+  })
+}
+
+// 音频Buffer转WAV格式
+const audioBufferToWav = (buffer) => {
+  const length = buffer.length
+  const arrayBuffer = new ArrayBuffer(44 + length * 2)
+  const view = new DataView(arrayBuffer)
+  const sampleRate = buffer.sampleRate
+
+  // WAV文件头
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i))
+    }
+  }
+
+  writeString(0, 'RIFF')
+  view.setUint32(4, 36 + length * 2, true)
+  writeString(8, 'WAVE')
+  writeString(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeString(36, 'data')
+  view.setUint32(40, length * 2, true)
+
+  // 写入音频数据
+  const channelData = buffer.getChannelData(0)
+  let offset = 44
+  for (let i = 0; i < length; i++) {
+    const sample = Math.max(-1, Math.min(1, channelData[i]))
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true)
+    offset += 2
+  }
+
+  return arrayBuffer
+}
+
+// 格式化录音时间
+const formatRecordingTime = (seconds) => {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+// 切换自动播放音频
+const toggleAutoPlayAudio = () => {
+  autoPlayAudio.value = !autoPlayAudio.value
+  ElMessage.info(autoPlayAudio.value ? '已开启自动播放语音' : '已关闭自动播放语音')
+}
+
+// 自动播放音频
+const autoPlayGeneratedAudio = (audioUrl) => {
+  if (!autoPlayAudio.value) return
+
+  try {
+    // 停止当前播放的音频
+    if (currentPlayingAudio.value) {
+      currentPlayingAudio.value.pause()
+      currentPlayingAudio.value.currentTime = 0
+    }
+
+    // 创建新的Audio对象并播放
+    const audio = new Audio(audioUrl)
+    currentPlayingAudio.value = audio
+
+    audio.onended = () => {
+      currentPlayingAudio.value = null
+    }
+
+    audio.onerror = (error) => {
+      console.error('音频播放失败:', error)
+      currentPlayingAudio.value = null
+    }
+
+    audio.play().catch(error => {
+      console.error('音频自动播放失败:', error)
+      // 浏览器阻止自动播放时的处理
+    })
+  } catch (error) {
+    console.error('音频播放出错:', error)
+  }
+}
+
 // 滚动到底部
 const scrollToBottom = () => {
   if (messagesContainer.value) {
@@ -606,6 +923,27 @@ watch(
   }
 )
 
+// 清理录音资源
+const cleanupRecording = () => {
+  if (isRecording.value) {
+    stopRecording()
+  }
+  if (recordingTimer.value) {
+    clearInterval(recordingTimer.value)
+    recordingTimer.value = null
+  }
+  if (currentPlayingAudio.value) {
+    currentPlayingAudio.value.pause()
+    currentPlayingAudio.value = null
+  }
+}
+
+// 组件卸载时清理
+onUnmounted(() => {
+  cleanupRecording()
+  window.removeEventListener('beforeunload', cleanupRecording)
+})
+
 // 监听选中对话的变化，自动更新全选状态
 watch(
   () => selectedConversations.value.length,
@@ -622,6 +960,18 @@ onMounted(async () => {
   if (chatStore.conversations.length === 0) {
     chatStore.createConversation('欢迎对话')
   }
+
+  // 初始化ASR功能
+  try {
+    await apiStore.initializeAsrData()
+    console.log('ASR功能初始化完成')
+  } catch (error) {
+    console.warn('ASR功能初始化失败:', error)
+    speechRecognitionEnabled.value = false
+  }
+
+  // 监听页面离开，清理资源
+  window.addEventListener('beforeunload', cleanupRecording)
 })
 </script>
 
@@ -707,6 +1057,17 @@ onMounted(async () => {
 
 .conversation-actions {
   margin-left: 10px;
+}
+
+.chat-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
 }
 
 /* 聊天主区域 */
@@ -913,6 +1274,73 @@ onMounted(async () => {
 .input-hint {
   font-size: 12px;
   color: #909399;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voice-hint {
+  color: #409eff;
+}
+
+.recording-hint {
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+/* 语音输入相关样式 */
+.input-with-voice {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.voice-input-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-button {
+  width: 50px !important;
+  height: 50px !important;
+  font-size: 20px;
+  transition: all 0.3s ease;
+}
+
+.record-button:hover {
+  transform: scale(1.05);
+}
+
+.recording-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #f56c6c;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.recording-icon {
+  color: #f56c6c;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }
 
 /* 响应式设计 */
