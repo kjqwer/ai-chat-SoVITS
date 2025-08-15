@@ -119,23 +119,12 @@ class ASREngine:
             # 尝试加载模型的优先级策略
             loading_strategies = [
                 {
-                    "name": "完整配置（包含标点模型）",
+                    "name": "推荐配置（含标点，无说话人）",
                     "config": {
                         "model": model_path,
                         "vad_model": vad_model,
                         "punc_model": punc_model,
-                        "spk_model": spk_model,
-                        "disable_update": True,
-                        "device": "cpu"
-                    }
-                },
-                {
-                    "name": "不加载说话人模型（保留标点）",
-                    "config": {
-                        "model": model_path,
-                        "vad_model": vad_model,
-                        "punc_model": punc_model,
-                        "spk_model": None,
+                        "spk_model": None,  # 默认跳过说话人模型
                         "disable_update": True,
                         "device": "cpu"
                     }
@@ -158,6 +147,17 @@ class ASREngine:
                         "vad_model": None,
                         "punc_model": model_manager.get_model_path_for_funasr("iic/punc_ct-transformer_cn-en-common-vocab471067-large"),
                         "spk_model": None,
+                        "disable_update": True,
+                        "device": "cpu"
+                    }
+                },
+                {
+                    "name": "完整配置（包含说话人模型）",
+                    "config": {
+                        "model": model_path,
+                        "vad_model": vad_model,
+                        "punc_model": punc_model,
+                        "spk_model": spk_model,
                         "disable_update": True,
                         "device": "cpu"
                     }

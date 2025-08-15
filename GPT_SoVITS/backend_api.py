@@ -343,33 +343,6 @@ try:
     print(f"   - ASR REST API路由已注册")
     print(f"   - ASR WebSocket路由已注册")
     
-    # 预加载ASR模型（避免首次识别延迟）
-    print("🔄 预加载ASR模型中...")
-    try:
-        import threading
-        def preload_asr():
-            try:
-                success = asr_engine.load_model()
-                if success:
-                    print("✅ ASR模型预加载成功")
-                    # 检查标点支持
-                    punc_status = asr_engine.check_punctuation_support()
-                    if punc_status.get("supported"):
-                        print("🔤 标点符号功能已就绪")
-                    else:
-                        print(f"⚠️ 标点符号功能: {punc_status.get('reason', '未知')}")
-                else:
-                    print("⚠️ ASR模型预加载失败，将在首次使用时加载")
-            except Exception as e:
-                print(f"⚠️ ASR模型预加载出错: {e}")
-        
-        # 在后台线程中预加载，不阻塞服务启动
-        preload_thread = threading.Thread(target=preload_asr, daemon=True)
-        preload_thread.start()
-        
-    except Exception as preload_error:
-        print(f"⚠️ ASR预加载线程启动失败: {preload_error}")
-    
 except ImportError as e:
     print(f"⚠️ ASR模块导入失败: {e}")
     print("   请确保已安装FunASR依赖: runtime\\python.exe asr/install_runtime.py")
@@ -670,6 +643,31 @@ if __name__ == "__main__":
     print("\n" + "="*60)
     print("🚀 GPT-SoVITS TTS 服务启动中...")
     print("="*60)
+    
+    # 预加载ASR模型（在服务启动前）
+    asr_preload = os.environ.get("ASR_PRELOAD", "true").lower() == "true"
+    if asr_preload:
+        try:
+            from asr.asr_engine import asr_engine
+            print("🔄 正在预加载ASR模型...")
+            
+            success = asr_engine.load_model()
+            if success:
+                print("✅ ASR模型预加载成功")
+                # 检查标点支持
+                punc_status = asr_engine.check_punctuation_support()
+                if punc_status.get("supported"):
+                    print("🔤 标点符号功能已就绪")
+                else:
+                    print(f"⚠️ 标点符号功能: {punc_status.get('reason', '未知')}")
+            else:
+                print("⚠️ ASR模型预加载失败，将在首次使用时加载")
+        except Exception as e:
+            print(f"⚠️ ASR模型预加载出错: {e}")
+    else:
+        print("⚠️ ASR预加载已禁用，首次识别时将加载模型")
+        print("   提示：设置环境变量 ASR_PRELOAD=true 可启用预加载")
+    
     print(f"📡 API服务地址: http://localhost:8000")
     print(f"📚 API文档地址: http://localhost:8000/docs")
     if os.path.exists(dist_path):
