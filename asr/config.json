@@ -1,9 +1,9 @@
 {
   "model": {
     "name": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-    "vad_model": "fsmn-vad",
-    "punc_model": "ct-punc",
-    "spk_model": "cam++",
+    "vad_model": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+    "punc_model": "iic/punc_ct-transformer_cn-en-common-vocab471067-large",
+    "spk_model": "iic/speech_campplus_sv_zh-cn_16k-common",
     "device": "auto"
   },
   "audio": {

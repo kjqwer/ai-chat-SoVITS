@@ -104,6 +104,53 @@ async def unload_model():
         raise HTTPException(status_code=500, detail=f"卸载模型失败: {str(e)}")
 
 
+@router.get("/model/punctuation/check")
+async def check_punctuation_support():
+    """检查当前模型是否支持标点符号生成"""
+    try:
+        result = asr_engine.check_punctuation_support()
+        return result
+    except Exception as e:
+        logger.error(f"检查标点支持失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"检查标点支持失败: {str(e)}")
+
+
+@router.post("/model/reload-with-punctuation")
+async def reload_model_with_punctuation():
+    """重新加载模型，强制启用标点功能"""
+    try:
+        def reload_sync():
+            # 先卸载当前模型
+            asr_engine.unload_model()
+            
+            # 临时修改配置，确保标点模型被加载
+            model_config = asr_engine.config.get("model", {})
+            if not model_config.get("punc_model"):
+                model_config["punc_model"] = "iic/punc_ct-transformer_cn-en-common-vocab471067-large"
+                asr_engine.config.config["model"] = model_config
+            
+            # 重新加载模型
+            return asr_engine.load_model()
+        
+        # 在线程池中执行模型重载
+        success = await asyncio.get_event_loop().run_in_executor(None, reload_sync)
+        
+        if success:
+            # 检查标点支持情况
+            punc_status = asr_engine.check_punctuation_support()
+            return {
+                "success": True, 
+                "message": "模型重载成功",
+                "punctuation_status": punc_status
+            }
+        else:
+            raise HTTPException(status_code=500, detail="模型重载失败")
+            
+    except Exception as e:
+        logger.error(f"重载模型失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"重载模型失败: {str(e)}")
+
+
 @router.post("/recognize/file", response_model=ASRResponse)
 async def recognize_audio_file(
     audio_file: UploadFile = File(..., description="音频文件")
@@ -517,28 +564,82 @@ async def split_audio_by_vad(
 async def vad_health_check():
     """VAD健康检查"""
     try:
-        status = {
-            "vad_available": asr_engine.vad_enabled,
-            "vad_engine_loaded": asr_engine.vad_engine is not None,
-            "vad_config": asr_engine.vad_config if asr_engine.vad_enabled else None
-        }
+        if not asr_engine.vad_enabled:
+            return {
+                "status": "disabled",
+                "message": "VAD功能已禁用"
+            }
         
-        if asr_engine.vad_enabled and asr_engine.vad_engine:
-            # 尝试加载VAD模型以测试健康状态
-            if not asr_engine.vad_engine.is_loaded:
-                model_loaded = asr_engine.vad_engine.load_model()
-                status["model_load_test"] = model_loaded
-            else:
-                status["model_load_test"] = True
+        if not asr_engine.vad_engine:
+            return {
+                "status": "error",
+                "message": "VAD引擎未初始化"
+            }
+        
+        # 获取VAD模型信息
+        model_info = asr_engine.vad_engine.get_silero_model_info()
         
         return {
-            "status": "healthy" if asr_engine.vad_enabled else "disabled",
-            "details": status
+            "status": "healthy" if asr_engine.vad_engine.is_loaded else "not_loaded",
+            "message": "VAD功能正常" if asr_engine.vad_engine.is_loaded else "VAD模型未加载",
+            "model_info": model_info
         }
         
     except Exception as e:
         logger.error(f"VAD健康检查失败: {str(e)}")
         return {
             "status": "error",
-            "error": str(e)
-        } 
+            "message": f"VAD健康检查失败: {str(e)}"
+        }
+
+
+@router.get("/vad/model/info")
+async def get_vad_model_info():
+    """获取VAD模型信息"""
+    try:
+        if not asr_engine.vad_enabled or not asr_engine.vad_engine:
+            return {
+                "available": False,
+                "message": "VAD功能未启用"
+            }
+        
+        info = asr_engine.vad_engine.get_silero_model_info()
+        return {
+            "available": True,
+            **info
+        }
+        
+    except Exception as e:
+        logger.error(f"获取VAD模型信息失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取VAD模型信息失败: {str(e)}")
+
+
+@router.post("/vad/model/copy-to-local")
+async def copy_vad_model_to_local():
+    """将VAD模型复制到本地目录"""
+    try:
+        if not asr_engine.vad_enabled or not asr_engine.vad_engine:
+            raise HTTPException(status_code=400, detail="VAD功能未启用")
+        
+        def copy_sync():
+            return asr_engine.vad_engine.copy_silero_to_local()
+        
+        # 在线程池中执行复制操作
+        success = await asyncio.get_event_loop().run_in_executor(None, copy_sync)
+        
+        if success:
+            # 获取更新后的模型信息
+            model_info = asr_engine.vad_engine.get_silero_model_info()
+            return {
+                "success": True,
+                "message": "VAD模型已复制到本地",
+                "model_info": model_info
+            }
+        else:
+            raise HTTPException(status_code=500, detail="复制VAD模型失败")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"复制VAD模型失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"复制VAD模型失败: {str(e)}") 

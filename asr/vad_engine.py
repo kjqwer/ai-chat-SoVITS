@@ -69,14 +69,29 @@ class SileroVAD:
             if self.model_type == "silero_vad" and TORCH_AVAILABLE:
                 self.logger.info("正在加载Silero VAD模型...")
                 
+                # 检查是否有本地缓存的模型
+                local_model_path = self._get_local_silero_path()
+                
                 # 使用torch.hub加载silero-vad
                 try:
-                    self.model, self.utils = torch.hub.load(
-                        repo_or_dir='snakers4/silero-vad',
-                        model='silero_vad',
-                        force_reload=False,
-                        onnx=False
-                    )
+                    if local_model_path and os.path.exists(local_model_path):
+                        self.logger.info(f"使用本地缓存的Silero VAD模型: {local_model_path}")
+                        # 尝试从本地路径加载
+                        self.model, self.utils = torch.hub.load(
+                            repo_or_dir=local_model_path,
+                            model='silero_vad',
+                            source='local',
+                            force_reload=False,
+                            onnx=False
+                        )
+                    else:
+                        self.logger.info("从远程仓库加载Silero VAD模型...")
+                        self.model, self.utils = torch.hub.load(
+                            repo_or_dir='snakers4/silero-vad',
+                            model='silero_vad',
+                            force_reload=False,
+                            onnx=False
+                        )
                     
                     # 移动模型到指定设备
                     if self.device == "cuda" and torch.cuda.is_available():
@@ -118,6 +133,115 @@ class SileroVAD:
         except Exception as e:
             self.logger.error(f"VAD模型加载失败: {str(e)}")
             return False
+    
+    def _get_local_silero_path(self) -> Optional[str]:
+        """获取本地Silero VAD模型路径"""
+        try:
+            # 检查常见的缓存路径
+            possible_paths = [
+                os.path.expanduser("~/.cache/torch/hub/snakers4_silero-vad_master"),
+                os.path.expanduser("~/.cache/torch/hub/snakers4_silero-vad_main"),
+                # 项目本地路径
+                os.path.join(os.getcwd(), "asr_models", "silero_vad"),
+                # Windows路径
+                os.path.expandvars("%USERPROFILE%\\.cache\\torch\\hub\\snakers4_silero-vad_master"),
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path) and os.path.isdir(path):
+                    # 检查是否包含必要的文件
+                    if os.path.exists(os.path.join(path, "hubconf.py")):
+                        self.logger.info(f"找到本地Silero VAD模型: {path}")
+                        return path
+            
+            return None
+            
+        except Exception as e:
+            self.logger.warning(f"检查本地Silero模型路径时出错: {e}")
+            return None
+    
+    def copy_silero_to_local(self) -> bool:
+        """将Silero VAD模型复制到项目本地目录"""
+        try:
+            import shutil
+            
+            # 寻找缓存中的模型
+            cache_paths = [
+                os.path.expanduser("~/.cache/torch/hub/snakers4_silero-vad_master"),
+                os.path.expanduser("~/.cache/torch/hub/snakers4_silero-vad_main"),
+                os.path.expandvars("%USERPROFILE%\\.cache\\torch\\hub\\snakers4_silero-vad_master"),
+            ]
+            
+            source_path = None
+            for path in cache_paths:
+                if os.path.exists(path) and os.path.isdir(path):
+                    if os.path.exists(os.path.join(path, "hubconf.py")):
+                        source_path = path
+                        break
+            
+            if not source_path:
+                self.logger.warning("未找到缓存的Silero VAD模型")
+                return False
+            
+            # 目标路径
+            target_path = os.path.join(os.getcwd(), "asr_models", "silero_vad")
+            
+            if os.path.exists(target_path):
+                self.logger.info(f"Silero VAD模型已存在于本地: {target_path}")
+                return True
+            
+            # 创建目标目录
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            
+            # 复制模型
+            self.logger.info(f"正在复制Silero VAD模型: {source_path} -> {target_path}")
+            shutil.copytree(source_path, target_path)
+            
+            self.logger.info(f"✅ Silero VAD模型已复制到本地: {target_path}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"复制Silero VAD模型失败: {str(e)}")
+            return False
+    
+    def get_silero_model_info(self) -> Dict[str, Any]:
+        """获取Silero VAD模型信息"""
+        try:
+            # 检查缓存路径
+            cache_paths = [
+                os.path.expanduser("~/.cache/torch/hub/snakers4_silero-vad_master"),
+                os.path.expanduser("~/.cache/torch/hub/snakers4_silero-vad_main"),
+                os.path.expandvars("%USERPROFILE%\\.cache\\torch\\hub\\snakers4_silero-vad_master"),
+            ]
+            
+            cache_exists = False
+            cache_path = None
+            for path in cache_paths:
+                if os.path.exists(path):
+                    cache_exists = True
+                    cache_path = path
+                    break
+            
+            # 检查本地路径
+            local_path = os.path.join(os.getcwd(), "asr_models", "silero_vad")
+            local_exists = os.path.exists(local_path)
+            
+            return {
+                "cache_exists": cache_exists,
+                "cache_path": cache_path,
+                "local_exists": local_exists,
+                "local_path": local_path,
+                "is_loaded": self.is_loaded,
+                "current_device": self.device if self.is_loaded else None
+            }
+            
+        except Exception as e:
+            self.logger.error(f"获取Silero模型信息失败: {str(e)}")
+            return {
+                "cache_exists": False,
+                "local_exists": False,
+                "error": str(e)
+            }
     
     def _load_onnx_model(self) -> bool:
         """加载ONNX模型"""

@@ -95,42 +95,107 @@ class ASREngine:
             # 获取本地模型路径（如果存在的话）
             model_path = model_manager.get_model_path_for_funasr(self.model_name)
             
-            # 尝试使用简化配置加载FunASR模型
-            try:
-                # 方法1: 最简配置，只加载主模型
-                self.model = AutoModel(
-                    model=model_path,
-                    disable_update=True,  # 禁用自动更新
-                    device="cpu"  # 强制使用CPU避免CUDA问题
-                )
-                self.logger.info("使用简化配置加载模型成功")
-            except Exception as e:
-                self.logger.warning(f"简化配置加载失败: {e}")
-                
-                # 方法2: 尝试不加载说话人模型
+            # 获取模型配置
+            model_config = self.config.get("model", {})
+            vad_model = model_config.get("vad_model", "fsmn-vad")
+            punc_model = model_config.get("punc_model", "ct-punc")
+            spk_model = model_config.get("spk_model", "cam++")
+            
+            # 转换所有模型路径为本地路径（如果存在）
+            if vad_model and vad_model.startswith("iic/"):
+                vad_model = model_manager.get_model_path_for_funasr(vad_model)
+            if punc_model and punc_model.startswith("iic/"):
+                punc_model = model_manager.get_model_path_for_funasr(punc_model)
+            if spk_model and spk_model.startswith("iic/"):
+                spk_model = model_manager.get_model_path_for_funasr(spk_model)
+            
+            # 显示模型路径信息
+            self.logger.info(f"模型路径配置:")
+            self.logger.info(f"  主模型: {model_path}")
+            self.logger.info(f"  VAD模型: {vad_model}")
+            self.logger.info(f"  标点模型: {punc_model}")
+            self.logger.info(f"  说话人模型: {spk_model}")
+            
+            # 尝试加载模型的优先级策略
+            loading_strategies = [
+                {
+                    "name": "完整配置（包含标点模型）",
+                    "config": {
+                        "model": model_path,
+                        "vad_model": vad_model,
+                        "punc_model": punc_model,
+                        "spk_model": spk_model,
+                        "disable_update": True,
+                        "device": "cpu"
+                    }
+                },
+                {
+                    "name": "不加载说话人模型（保留标点）",
+                    "config": {
+                        "model": model_path,
+                        "vad_model": vad_model,
+                        "punc_model": punc_model,
+                        "spk_model": None,
+                        "disable_update": True,
+                        "device": "cpu"
+                    }
+                },
+                {
+                    "name": "仅标点模型（不含VAD）",
+                    "config": {
+                        "model": model_path,
+                        "vad_model": None,
+                        "punc_model": punc_model,
+                        "spk_model": None,
+                        "disable_update": True,
+                        "device": "cpu"
+                    }
+                },
+                {
+                    "name": "使用本地标点模型路径",
+                    "config": {
+                        "model": model_path,
+                        "vad_model": None,
+                        "punc_model": model_manager.get_model_path_for_funasr("iic/punc_ct-transformer_cn-en-common-vocab471067-large"),
+                        "spk_model": None,
+                        "disable_update": True,
+                        "device": "cpu"
+                    }
+                },
+                {
+                    "name": "简化配置（无标点，最后选择）",
+                    "config": {
+                        "model": model_path,
+                        "disable_update": True,
+                        "device": "cpu"
+                    }
+                }
+            ]
+            
+            # 按优先级尝试加载
+            for strategy in loading_strategies:
                 try:
-                    self.model = AutoModel(
-                        model=self.model_name,
-                        vad_model="fsmn-vad",
-                        punc_model="ct-punc",
-                        spk_model=None,  # 不加载说话人识别模型
-                        disable_update=True,
-                        device="cpu"
-                    )
-                    self.logger.info("不加载说话人模型成功")
-                except Exception as e2:
-                    self.logger.warning(f"第二种方法也失败: {e2}")
+                    self.logger.info(f"尝试使用策略: {strategy['name']}")
+                    self.model = AutoModel(**strategy['config'])
+                    self.logger.info(f"✅ {strategy['name']} 加载成功")
                     
-                    # 方法3: 最基础配置
-                    self.model = AutoModel(
-                        model=self.model_name,
-                        vad_model=None,
-                        punc_model=None,
-                        spk_model=None,
-                        disable_update=True,
-                        device="cpu"
-                    )
-                    self.logger.info("使用最基础配置加载成功")
+                    # 检查是否包含标点模型
+                    has_punc = strategy['config'].get('punc_model') is not None
+                    if has_punc:
+                        self.logger.info("🔤 标点符号模型已加载，支持标点生成")
+                    else:
+                        self.logger.warning("⚠️ 未加载标点模型，识别结果可能无标点符号")
+                    
+                    break
+                    
+                except Exception as e:
+                    self.logger.warning(f"❌ {strategy['name']} 失败: {e}")
+                    continue
+            else:
+                # 所有策略都失败，尝试最基础的降级加载
+                self.logger.info("所有预定义策略失败，尝试最终降级...")
+                self.model = AutoModel(model=self.model_name)
+                self.logger.warning("⚠️ 使用最基础配置，功能可能受限")
             
             self.is_loaded = True
             self.logger.info("ASR模型加载成功")
@@ -138,16 +203,7 @@ class ASREngine:
             
         except Exception as e:
             self.logger.error(f"加载ASR模型失败: {str(e)}")
-            # 尝试降级处理
-            try:
-                self.logger.info("尝试降级加载...")
-                self.model = AutoModel(model=self.model_name)
-                self.is_loaded = True
-                self.logger.info("降级加载成功")
-                return True
-            except Exception as e2:
-                self.logger.error(f"降级加载也失败: {str(e2)}")
-                return False
+            return False
     
     def unload_model(self):
         """卸载模型释放内存"""
@@ -457,6 +513,28 @@ class ASREngine:
         Returns:
             Dict: 模型信息
         """
+        # 检查是否有标点模型的相关属性或配置
+        has_punctuation = False
+        punctuation_model = None
+        
+        if self.is_loaded and self.model:
+            # 检查模型配置
+            model_config = self.config.get("model", {})
+            punctuation_model = model_config.get("punc_model")
+            
+            # 如果配置中有标点模型，认为支持标点
+            if punctuation_model and punctuation_model != "None":
+                has_punctuation = True
+            
+            # 尝试检查模型对象本身是否有标点功能
+            try:
+                if hasattr(self.model, 'punc_model') and self.model.punc_model is not None:
+                    has_punctuation = True
+                elif hasattr(self.model, 'models') and 'punc' in str(self.model.models):
+                    has_punctuation = True
+            except:
+                pass
+        
         return {
             "model_name": self.model_name,
             "is_loaded": self.is_loaded,
@@ -464,7 +542,55 @@ class ASREngine:
             "vad_enabled": self.vad_enabled,
             "vad_available": VAD_AVAILABLE,
             "vad_config": self.vad_config if self.vad_enabled else None,
+            "punctuation_supported": has_punctuation,
+            "punctuation_model": punctuation_model,
         }
+    
+    def check_punctuation_support(self) -> Dict[str, Any]:
+        """
+        专门检查标点符号支持情况
+        
+        Returns:
+            Dict: 标点支持信息
+        """
+        if not self.is_loaded:
+            return {
+                "supported": False,
+                "reason": "模型未加载",
+                "model_loaded": False
+            }
+        
+        model_config = self.config.get("model", {})
+        punc_model = model_config.get("punc_model")
+        
+        if not punc_model or punc_model == "None":
+            return {
+                "supported": False,
+                "reason": "配置中未指定标点模型",
+                "model_loaded": True,
+                "config_punc_model": None
+            }
+        
+        try:
+            # 尝试检查模型是否实际加载了标点功能
+            has_punc_attr = hasattr(self.model, 'punc_model')
+            punc_model_value = getattr(self.model, 'punc_model', None) if has_punc_attr else None
+            
+            return {
+                "supported": True,
+                "reason": "标点模型已配置",
+                "model_loaded": True,
+                "config_punc_model": punc_model,
+                "has_punc_attribute": has_punc_attr,
+                "punc_model_loaded": punc_model_value is not None if has_punc_attr else "unknown"
+            }
+        except Exception as e:
+            return {
+                "supported": False,
+                "reason": f"检查标点模型时出错: {str(e)}",
+                "model_loaded": True,
+                "config_punc_model": punc_model
+            }
 
 
 # 全局ASR引擎实例
