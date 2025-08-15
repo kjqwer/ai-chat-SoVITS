@@ -73,6 +73,79 @@ async def get_model_info():
         raise HTTPException(status_code=500, detail=f"获取模型信息失败: {str(e)}")
 
 
+@router.get("/status")
+async def get_asr_status():
+    """获取ASR系统完整状态"""
+    try:
+        # 基本模型信息
+        model_info = asr_engine.get_model_info()
+        
+        # 标点支持状态
+        punct_status = asr_engine.check_punctuation_support()
+        
+        # VAD状态
+        vad_status = None
+        if asr_engine.vad_enabled and asr_engine.vad_engine:
+            vad_status = asr_engine.vad_engine.get_silero_model_info()
+        
+        return {
+            "model_info": model_info,
+            "punctuation_status": punct_status,
+            "vad_status": vad_status,
+            "ready_for_recognition": model_info.get("is_loaded", False)
+        }
+        
+    except Exception as e:
+        logger.error(f"获取ASR状态失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取ASR状态失败: {str(e)}")
+
+
+@router.post("/preload")
+async def preload_models():
+    """预加载所有ASR模型"""
+    try:
+        def preload_sync():
+            results = {}
+            
+            # 加载主ASR模型
+            if not asr_engine.is_loaded:
+                main_success = asr_engine.load_model()
+                results["main_model"] = main_success
+            else:
+                results["main_model"] = True
+            
+            # 加载VAD模型
+            if asr_engine.vad_enabled and asr_engine.vad_engine:
+                if not asr_engine.vad_engine.is_loaded:
+                    vad_success = asr_engine.vad_engine.load_model()
+                    results["vad_model"] = vad_success
+                else:
+                    results["vad_model"] = True
+            else:
+                results["vad_model"] = False
+            
+            # 检查标点功能
+            punct_status = asr_engine.check_punctuation_support()
+            results["punctuation_support"] = punct_status
+            
+            return results
+        
+        # 在线程池中执行预加载
+        results = await asyncio.get_event_loop().run_in_executor(None, preload_sync)
+        
+        all_success = results.get("main_model", False)
+        
+        return {
+            "success": all_success,
+            "message": "模型预加载完成" if all_success else "模型预加载部分失败",
+            "details": results
+        }
+        
+    except Exception as e:
+        logger.error(f"预加载模型失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"预加载模型失败: {str(e)}")
+
+
 @router.post("/model/load")
 async def load_model():
     """加载ASR模型"""

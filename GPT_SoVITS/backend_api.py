@@ -335,12 +335,40 @@ try:
     
     from asr import asr_router
     from asr.websocket_server import websocket_router
+    from asr.asr_engine import asr_engine
     
     app.include_router(asr_router)
     app.include_router(websocket_router)
     print("✅ ASR语音识别模块已加载")
     print(f"   - ASR REST API路由已注册")
     print(f"   - ASR WebSocket路由已注册")
+    
+    # 预加载ASR模型（避免首次识别延迟）
+    print("🔄 预加载ASR模型中...")
+    try:
+        import threading
+        def preload_asr():
+            try:
+                success = asr_engine.load_model()
+                if success:
+                    print("✅ ASR模型预加载成功")
+                    # 检查标点支持
+                    punc_status = asr_engine.check_punctuation_support()
+                    if punc_status.get("supported"):
+                        print("🔤 标点符号功能已就绪")
+                    else:
+                        print(f"⚠️ 标点符号功能: {punc_status.get('reason', '未知')}")
+                else:
+                    print("⚠️ ASR模型预加载失败，将在首次使用时加载")
+            except Exception as e:
+                print(f"⚠️ ASR模型预加载出错: {e}")
+        
+        # 在后台线程中预加载，不阻塞服务启动
+        preload_thread = threading.Thread(target=preload_asr, daemon=True)
+        preload_thread.start()
+        
+    except Exception as preload_error:
+        print(f"⚠️ ASR预加载线程启动失败: {preload_error}")
     
 except ImportError as e:
     print(f"⚠️ ASR模块导入失败: {e}")
