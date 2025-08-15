@@ -19,5 +19,18 @@
     "enabled": true,
     "max_size": 100,
     "ttl": 3600
+  },
+  "vad": {
+    "enabled": true,
+    "engine": "silero",
+    "model_type": "silero_vad",
+    "device": "cpu",
+    "threshold": 0.5,
+    "min_speech_duration_ms": 250,
+    "max_speech_duration_s": 30.0,
+    "min_silence_duration_ms": 100,
+    "speech_pad_ms": 30,
+    "pre_process": true,
+    "return_segments": false
   }
 } 

@@ -9,4 +9,6 @@ uvicorn[standard]
 python-multipart
 pydantic
 websockets
-aiofiles 
+aiofiles
+# Silero VAD dependencies
+onnxruntime>=1.15.0 

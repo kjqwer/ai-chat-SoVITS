@@ -33,6 +33,19 @@ class ASRConfig:
             "enabled": True,
             "max_size": 100,  # 最大缓存条目数
             "ttl": 3600,  # 缓存生存时间（秒）
+        },
+        "vad": {
+            "enabled": True,  # 是否启用VAD
+            "engine": "silero",  # VAD引擎类型: "silero", "funasr"
+            "model_type": "silero_vad",  # 模型类型: "silero_vad", "onnx"
+            "device": "auto",  # 设备类型: "auto", "cpu", "cuda"
+            "threshold": 0.5,  # 语音检测阈值 (0-1)
+            "min_speech_duration_ms": 250,  # 最小语音时长(毫秒)
+            "max_speech_duration_s": 30.0,  # 最大语音时长(秒)
+            "min_silence_duration_ms": 100,  # 最小静音时长(毫秒)
+            "speech_pad_ms": 30,  # 语音片段填充时长(毫秒)
+            "pre_process": True,  # 是否在ASR前使用VAD预处理
+            "return_segments": False,  # 是否返回VAD分段信息
         }
     }
     

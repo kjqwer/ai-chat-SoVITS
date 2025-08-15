@@ -26,11 +26,19 @@ if errorlevel 1 (
     )
 )
 
+echo 正在检查VAD模块依赖...
+runtime\python.exe -c "import torch; import onnxruntime; print('✅ VAD依赖已安装')" 2>nul
+if errorlevel 1 (
+    echo ⚠️ VAD依赖未完全安装，VAD功能可能受限
+    echo 如需完整VAD功能，请确保安装: torch, onnxruntime
+)
+
 echo.
 echo 正在启动服务...
 echo 📡 API服务地址: http://localhost:8000
 echo 📚 API文档地址: http://localhost:8000/docs
 echo 🎤 ASR接口地址: http://localhost:8000/asr/health
+echo 🎙️ VAD接口地址: http://localhost:8000/asr/vad/health
 echo.
 echo 按 Ctrl+C 停止服务
 echo.

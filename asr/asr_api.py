@@ -1,6 +1,6 @@
 """
 FunASR API路由
-提供语音识别的HTTP接口
+提供语音识别的HTTP接口，集成Silero VAD功能
 """
 
 import os
@@ -36,6 +36,20 @@ class ASRResponse(BaseModel):
     speaker_info: Optional[Any] = None
     timestamp: Optional[list] = None
     error: Optional[str] = None
+    # VAD相关字段
+    vad_segments: Optional[int] = None
+    recognized_segments: Optional[int] = None
+    detailed_results: Optional[list] = None
+    processing_method: Optional[str] = None
+
+
+class VADResponse(BaseModel):
+    """VAD检测响应模型"""
+    success: bool
+    segments: Optional[list] = None
+    total_segments: Optional[int] = None
+    total_speech_duration: Optional[float] = None
+    error: Optional[str] = None
 
 
 class ModelInfo(BaseModel):
@@ -43,6 +57,9 @@ class ModelInfo(BaseModel):
     model_name: str
     is_loaded: bool
     funasr_available: bool
+    vad_enabled: Optional[bool] = None
+    vad_available: Optional[bool] = None
+    vad_config: Optional[dict] = None
 
 
 @router.get("/model/info", response_model=ModelInfo)
@@ -282,4 +299,246 @@ async def get_model_config():
         return config
     except Exception as e:
         logger.error(f"获取模型配置失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取模型配置失败: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"获取模型配置失败: {str(e)}")
+
+
+# ======================
+# VAD 相关接口
+# ======================
+
+@router.post("/vad/detect", response_model=VADResponse)
+async def detect_speech_segments(
+    file: UploadFile = File(..., description="音频文件"),
+    threshold: Optional[float] = Form(0.5, description="语音检测阈值 (0-1)"),
+    min_speech_duration_ms: Optional[int] = Form(250, description="最小语音时长(毫秒)"),
+    max_speech_duration_s: Optional[float] = Form(30.0, description="最大语音时长(秒)"),
+    min_silence_duration_ms: Optional[int] = Form(100, description="最小静音时长(毫秒)"),
+    speech_pad_ms: Optional[int] = Form(30, description="语音片段填充时长(毫秒)")
+):
+    """
+    使用VAD检测音频中的语音片段
+    """
+    if not asr_engine.vad_enabled:
+        raise HTTPException(status_code=503, detail="VAD功能未启用")
+    
+    # 检查文件格式
+    if not file.filename.lower().endswith(('.wav', '.mp3', '.m4a', '.flac', '.aac', '.ogg')):
+        raise HTTPException(status_code=400, detail="不支持的音频格式")
+    
+    temp_file = None
+    try:
+        # 保存上传的文件到临时目录
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
+            temp_file = tmp.name
+            content = await file.read()
+            tmp.write(content)
+        
+        # VAD参数
+        vad_params = {
+            "threshold": threshold,
+            "min_speech_duration_ms": min_speech_duration_ms,
+            "max_speech_duration_s": max_speech_duration_s,
+            "min_silence_duration_ms": min_silence_duration_ms,
+            "speech_pad_ms": speech_pad_ms,
+        }
+        
+        # 检测语音片段
+        segments = asr_engine._process_with_vad(temp_file)
+        
+        if segments is None:
+            return VADResponse(
+                success=False,
+                error="VAD检测失败"
+            )
+        
+        # 计算总的语音时长
+        total_speech_duration = sum(seg['duration'] for seg in segments)
+        
+        return VADResponse(
+            success=True,
+            segments=segments,
+            total_segments=len(segments),
+            total_speech_duration=total_speech_duration
+        )
+        
+    except Exception as e:
+        logger.error(f"VAD检测失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"VAD检测失败: {str(e)}")
+    
+    finally:
+        # 清理临时文件
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except:
+                pass
+
+
+@router.post("/recognize/vad", response_model=ASRResponse)
+async def recognize_with_vad(
+    file: UploadFile = File(..., description="音频文件"),
+    return_segments: Optional[bool] = Form(False, description="是否返回详细的VAD分段信息")
+):
+    """
+    使用VAD分段进行语音识别
+    
+    先使用VAD检测语音片段，然后对每个片段进行语音识别，最后合并结果
+    """
+    if not asr_engine.vad_enabled:
+        raise HTTPException(status_code=503, detail="VAD功能未启用")
+    
+    # 检查文件格式
+    if not file.filename.lower().endswith(('.wav', '.mp3', '.m4a', '.flac', '.aac', '.ogg')):
+        raise HTTPException(status_code=400, detail="不支持的音频格式")
+    
+    temp_file = None
+    try:
+        # 保存上传的文件到临时目录
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
+            temp_file = tmp.name
+            content = await file.read()
+            tmp.write(content)
+        
+        # 临时更新返回分段设置
+        original_return_segments = asr_engine.vad_config.get("return_segments", False)
+        asr_engine.vad_config["return_segments"] = return_segments
+        
+        try:
+            # 使用VAD分段识别
+            result = asr_engine.recognize_with_vad(temp_file)
+            
+            return ASRResponse(
+                success=result.get("success", False),
+                text=result.get("text", ""),
+                confidence=result.get("confidence"),
+                error=result.get("error"),
+                vad_segments=result.get("vad_segments"),
+                recognized_segments=result.get("recognized_segments"),
+                detailed_results=result.get("detailed_results"),
+                processing_method=result.get("processing_method", "vad_segmented")
+            )
+            
+        finally:
+            # 恢复原始设置
+            asr_engine.vad_config["return_segments"] = original_return_segments
+        
+    except Exception as e:
+        logger.error(f"VAD分段识别失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"VAD分段识别失败: {str(e)}")
+    
+    finally:
+        # 清理临时文件
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except:
+                pass
+
+
+@router.post("/vad/split")
+async def split_audio_by_vad(
+    file: UploadFile = File(..., description="音频文件"),
+    output_format: Optional[str] = Form("wav", description="输出格式 (wav, mp3, flac)")
+):
+    """
+    使用VAD分割音频文件
+    
+    返回分割后的音频文件列表（需要额外实现文件下载接口）
+    """
+    if not asr_engine.vad_enabled:
+        raise HTTPException(status_code=503, detail="VAD功能未启用")
+    
+    # 检查文件格式
+    if not file.filename.lower().endswith(('.wav', '.mp3', '.m4a', '.flac', '.aac', '.ogg')):
+        raise HTTPException(status_code=400, detail="不支持的音频格式")
+    
+    temp_file = None
+    output_dir = None
+    try:
+        # 保存上传的文件到临时目录
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
+            temp_file = tmp.name
+            content = await file.read()
+            tmp.write(content)
+        
+        # 创建输出目录
+        output_dir = tempfile.mkdtemp(prefix="vad_split_")
+        
+        # 分割音频
+        split_files = asr_engine.split_audio_by_vad(temp_file, output_dir)
+        
+        if not split_files:
+            return {
+                "success": False,
+                "error": "未检测到语音片段或分割失败"
+            }
+        
+        # 返回分割结果信息
+        file_info = []
+        for i, file_path in enumerate(split_files):
+            file_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path)
+            file_info.append({
+                "segment_id": i + 1,
+                "filename": file_name,
+                "file_size": file_size,
+                "file_path": file_path  # 注意：实际应用中不应该暴露完整路径
+            })
+        
+        return {
+            "success": True,
+            "total_segments": len(split_files),
+            "output_directory": output_dir,
+            "files": file_info,
+            "message": f"音频已分割为 {len(split_files)} 个片段"
+        }
+        
+    except Exception as e:
+        logger.error(f"VAD音频分割失败: {str(e)}")
+        # 清理输出目录
+        if output_dir and os.path.exists(output_dir):
+            import shutil
+            try:
+                shutil.rmtree(output_dir)
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"VAD音频分割失败: {str(e)}")
+    
+    finally:
+        # 清理临时文件
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except:
+                pass
+
+
+@router.get("/vad/health")
+async def vad_health_check():
+    """VAD健康检查"""
+    try:
+        status = {
+            "vad_available": asr_engine.vad_enabled,
+            "vad_engine_loaded": asr_engine.vad_engine is not None,
+            "vad_config": asr_engine.vad_config if asr_engine.vad_enabled else None
+        }
+        
+        if asr_engine.vad_enabled and asr_engine.vad_engine:
+            # 尝试加载VAD模型以测试健康状态
+            if not asr_engine.vad_engine.is_loaded:
+                model_loaded = asr_engine.vad_engine.load_model()
+                status["model_load_test"] = model_loaded
+            else:
+                status["model_load_test"] = True
+        
+        return {
+            "status": "healthy" if asr_engine.vad_enabled else "disabled",
+            "details": status
+        }
+        
+    except Exception as e:
+        logger.error(f"VAD健康检查失败: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e)
+        } 

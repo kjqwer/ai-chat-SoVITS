@@ -91,6 +91,40 @@ def install_minimal_dependencies(python_exe):
     return True
 
 
+def install_vad_dependencies(python_exe):
+    """安装VAD相关依赖"""
+    print("\n=== 安装Silero VAD依赖 ===")
+    
+    vad_deps = [
+        "onnxruntime>=1.15.0",  # VAD ONNX推理
+        "torch>=1.11.0",        # PyTorch VAD模型
+        "torchaudio>=0.11.0",   # 音频处理
+    ]
+    
+    success_count = 0
+    for dep in vad_deps:
+        cmd = f'"{python_exe}" -m pip install "{dep}"'
+        if run_command(cmd, f"安装VAD依赖 {dep}"):
+            success_count += 1
+        else:
+            print(f"⚠️ {dep} 安装失败，但将继续安装其他依赖")
+    
+    print(f"VAD依赖安装完成: {success_count}/{len(vad_deps)} 个包安装成功")
+    
+    # 验证VAD功能
+    try:
+        cmd = f'"{python_exe}" -c "import torch; print(f\'✅ PyTorch {torch.__version__} 可用\')"'
+        run_command(cmd, "验证PyTorch")
+        
+        cmd = f'"{python_exe}" -c "import onnxruntime as ort; print(f\'✅ ONNX Runtime {ort.__version__} 可用\')"'
+        run_command(cmd, "验证ONNX Runtime")
+        
+        return True
+    except Exception as e:
+        print(f"⚠️ VAD依赖验证失败: {e}")
+        return False
+
+
 def install_funasr_to_runtime(python_exe):
     """安装FunASR到runtime环境"""
     print("\n=== 安装FunASR到runtime环境 ===")
@@ -274,6 +308,9 @@ def main():
         print("❌ 基础依赖安装失败")
         sys.exit(1)
     
+    # 安装VAD依赖
+    vad_success = install_vad_dependencies(python_exe)
+    
     # 尝试安装FunASR
     funasr_success = install_funasr_to_runtime(python_exe)
     
@@ -287,10 +324,14 @@ def main():
     
     print("\n🎉 Runtime环境ASR模块安装完成！")
     
-    if funasr_success:
-        print("✅ 完整模式：FunASR功能完全可用")
+    if funasr_success and vad_success:
+        print("✅ 完整模式：FunASR + Silero VAD功能完全可用")
+    elif funasr_success:
+        print("✅ FunASR可用，⚠️ VAD功能可能受限")
+    elif vad_success:
+        print("✅ VAD可用，⚠️ FunASR功能受限")
     else:
-        print("⚠️ 降级模式：基础框架可用，但语音识别功能受限")
+        print("⚠️ 降级模式：基础框架可用，但语音识别和VAD功能受限")
     
     print("\n后续步骤:")
     print("1. 双击运行: 启动ASR服务.bat")
