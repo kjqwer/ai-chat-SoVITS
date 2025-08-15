@@ -315,6 +315,42 @@ app.add_middleware(
     allow_headers=["*"],  # 允许所有请求头
 )
 
+# 集成ASR模块
+try:
+    # 确保ASR模块在Python路径中
+    asr_path = os.path.join(now_dir, "asr")
+    if asr_path not in sys.path:
+        sys.path.insert(0, now_dir)
+    
+    print(f"尝试从路径加载ASR模块: {asr_path}")
+    
+    # 检查ASR目录是否存在
+    if not os.path.exists(asr_path):
+        raise ImportError(f"ASR目录不存在: {asr_path}")
+    
+    # 检查关键文件是否存在
+    asr_api_file = os.path.join(asr_path, "asr_api.py")
+    if not os.path.exists(asr_api_file):
+        raise ImportError(f"asr_api.py文件不存在: {asr_api_file}")
+    
+    from asr import asr_router
+    from asr.websocket_server import websocket_router
+    
+    app.include_router(asr_router)
+    app.include_router(websocket_router)
+    print("✅ ASR语音识别模块已加载")
+    print(f"   - ASR REST API路由已注册")
+    print(f"   - ASR WebSocket路由已注册")
+    
+except ImportError as e:
+    print(f"⚠️ ASR模块导入失败: {e}")
+    print("   请确保已安装FunASR依赖: runtime\\python.exe asr/install_runtime.py")
+    print(f"   ASR模块路径: {os.path.join(now_dir, 'asr')}")
+except Exception as e:
+    print(f"❌ ASR模块加载错误: {e}")
+    import traceback
+    traceback.print_exc()
+
 # 添加静态文件服务
 dist_path = os.path.join(now_dir, "ui", "dist")
 if os.path.exists(dist_path):

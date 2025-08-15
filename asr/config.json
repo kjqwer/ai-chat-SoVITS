@@ -1,0 +1,23 @@
+{
+  "model": {
+    "name": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+    "vad_model": "fsmn-vad",
+    "punc_model": "ct-punc",
+    "spk_model": "cam++",
+    "device": "auto"
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "max_duration": 300,
+    "supported_formats": [".wav", ".mp3", ".m4a", ".flac", ".aac", ".ogg"]
+  },
+  "api": {
+    "max_file_size": 52428800,
+    "timeout": 30
+  },
+  "cache": {
+    "enabled": true,
+    "max_size": 100,
+    "ttl": 3600
+  }
+} 

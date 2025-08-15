@@ -1,0 +1,12 @@
+funasr>=1.0.0
+torch>=1.11.0
+torchaudio>=0.11.0
+numpy
+soundfile
+librosa
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+websockets
+aiofiles 

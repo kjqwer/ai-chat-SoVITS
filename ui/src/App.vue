@@ -4,7 +4,8 @@ import { useApiStore } from './stores/api.js'
 import SettingsPage from './components/SettingsPage.vue'
 import ChatPage from './components/Page2.vue'
 import ConfigPage from './components/ConfigPage.vue'
-import { Setting, ChatDotRound, Tools } from '@element-plus/icons-vue'
+import ASRPage from './components/ASRPage.vue'
+import { Setting, ChatDotRound, Tools, Microphone } from '@element-plus/icons-vue'
 
 const apiStore = useApiStore()
 
@@ -61,6 +62,13 @@ onMounted(async () => {
             </el-icon>
             <span>配置管理</span>
           </el-menu-item>
+
+          <el-menu-item index="asr">
+            <el-icon>
+              <Microphone />
+            </el-icon>
+            <span>语音识别</span>
+          </el-menu-item>
         </el-menu>
 
         <!-- 系统状态显示 -->
@@ -98,6 +106,9 @@ onMounted(async () => {
 
           <!-- 配置管理页面 -->
           <ConfigPage v-else-if="activeMenu === 'config'" />
+
+          <!-- ASR语音识别页面 -->
+          <ASRPage v-else-if="activeMenu === 'asr'" />
 
           <!-- 默认页面 -->
           <div v-else class="welcome-page">
