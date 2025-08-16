@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useApiStore } from './stores/api.js'
 import SettingsPage from './components/SettingsPage.vue'
-import ChatPage from './components/Page2.vue'
+import ChatPage from './components/ChatPage.vue'
 import ConfigPage from './components/ConfigPage.vue'
 import ASRPage from './components/ASRPage.vue'
 import { Setting, ChatDotRound, Tools, Microphone } from '@element-plus/icons-vue'
