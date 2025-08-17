@@ -1,22 +1,17 @@
 import os
 import json
-import random
 import sys
 import logging
 import tempfile
-import time
-from typing import Optional, List, Dict, Any
+import atexit
+import shutil
 from pathlib import Path
 
 import torch
 import psutil
-import numpy as np
-import soundfile as sf
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import uvicorn
 
 # 设置高优先级
@@ -59,6 +54,15 @@ from TTS_infer_pack.TTS import TTS, TTS_Config
 from config import get_weights_names, name2sovits_path, name2gpt_path
 from process_ckpt import get_sovits_version_from_path_fast
 from tools.i18n.i18n import I18nAuto, scan_language_list
+
+# 导入API模块
+from apis.character_utils import load_character_data, get_default_happy_audio
+from apis.models_api import create_models_router
+from apis.characters_api import create_characters_router
+from apis.tts_api import create_tts_router
+from apis.config_api import create_config_router, create_api_config_router
+from apis.status_api import create_status_router
+from apis.frontend_api import create_frontend_router
 
 # 初始化i18n
 language = os.environ.get("language", "Auto")
@@ -144,99 +148,6 @@ if sovits_path:
 # 初始化TTS管道
 tts_pipeline = TTS(tts_config)
 
-# 角色数据加载
-def load_character_data():
-    """加载所有角色的音频数据"""
-    character_data = {}
-    reference_audios_path = "reference_audios"
-    
-    if not os.path.exists(reference_audios_path):
-        return character_data
-    
-    # 加载emotions目录
-    emotions_path = os.path.join(reference_audios_path, "emotions")
-    if os.path.exists(emotions_path):
-        for character_name in os.listdir(emotions_path):
-            character_dir = os.path.join(emotions_path, character_name)
-            if os.path.isdir(character_dir):
-                if character_name not in character_data:
-                    character_data[character_name] = {"emotions": {}, "randoms": {}}
-                
-                # 遍历语言目录
-                for lang_dir in os.listdir(character_dir):
-                    lang_path = os.path.join(character_dir, lang_dir)
-                    if os.path.isdir(lang_path):
-                        character_data[character_name]["emotions"][lang_dir] = []
-                        
-                        # 加载音频文件
-                        for audio_file in os.listdir(lang_path):
-                            if audio_file.endswith('.wav'):
-                                # 从文件名提取情感和文本
-                                import re
-                                match = re.match(r'【(.+?)】(.+)\.wav', audio_file)
-                                if match:
-                                    emotion = match.group(1)
-                                    text = match.group(2)
-                                    audio_path = os.path.join(lang_path, audio_file)
-                                    character_data[character_name]["emotions"][lang_dir].append({
-                                        "emotion": emotion,
-                                        "text": text,
-                                        "path": audio_path,
-                                    })
-    
-    # 加载randoms目录
-    randoms_path = os.path.join(reference_audios_path, "randoms")
-    if os.path.exists(randoms_path):
-        for character_name in os.listdir(randoms_path):
-            character_dir = os.path.join(randoms_path, character_name)
-            if os.path.isdir(character_dir):
-                if character_name not in character_data:
-                    character_data[character_name] = {"emotions": {}, "randoms": {}}
-                
-                # 遍历语言目录
-                for lang_dir in os.listdir(character_dir):
-                    lang_path = os.path.join(character_dir, lang_dir)
-                    if os.path.isdir(lang_path):
-                        character_data[character_name]["randoms"][lang_dir] = []
-                        
-                        # 加载音频和lab文件对
-                        wav_files = [f for f in os.listdir(lang_path) if f.endswith('.wav')]
-                        for wav_file in wav_files:
-                            lab_file = wav_file.replace('.wav', '.lab')
-                            lab_path = os.path.join(lang_path, lab_file)
-                            wav_path = os.path.join(lang_path, wav_file)
-                            
-                            if os.path.exists(lab_path):
-                                try:
-                                    with open(lab_path, 'r', encoding='utf-8') as f:
-                                        text = f.read().strip()
-                                    
-                                    character_data[character_name]["randoms"][lang_dir].append({
-                                        "text": text,
-                                        "path": wav_path,
-                                    })
-                                except Exception as e:
-                                    print(f"Error reading lab file {lab_path}: {e}")
-    
-    return character_data
-
-def get_default_happy_audio(character_name, character_data, language="中文"):
-    """获取角色的默认开心音频"""
-    if character_name in character_data and language in character_data[character_name]["emotions"]:
-        for audio_info in character_data[character_name]["emotions"][language]:
-            if "开心" in audio_info["emotion"] or "happy" in audio_info["emotion"]:
-                return audio_info
-        # 如果没有开心音频，返回第一个emotions音频
-        if character_data[character_name]["emotions"][language]:
-            return character_data[character_name]["emotions"][language][0]
-    
-    # 如果emotions中没有音频，尝试randoms
-    if character_name in character_data and language in character_data[character_name]["randoms"]:
-        if character_data[character_name]["randoms"][language]:
-            return character_data[character_name]["randoms"][language][0]
-    
-    return None
-
 # 加载角色数据
 character_data = load_character_data()
 
@@ -272,36 +183,6 @@ app_state = AppState()
 # 创建临时文件目录
 temp_dir = tempfile.mkdtemp(prefix="tts_output_")
 print(f"临时文件目录: {temp_dir}")
-
-# Pydantic模型
-class SoVITSModelInfo(BaseModel):
-    name: str
-    path: str
-    is_current: bool
-
-class CharacterInfo(BaseModel):
-    name: str
-    is_current: bool
-
-class TTSRequest(BaseModel):
-    text: str
-
-class InferenceConfigUpdate(BaseModel):
-    text_lang: Optional[str] = None
-    prompt_lang: Optional[str] = None
-    top_k: Optional[int] = None
-    top_p: Optional[float] = None
-    temperature: Optional[float] = None
-    text_split_method: Optional[str] = None
-    batch_size: Optional[int] = None
-    speed_factor: Optional[float] = None
-    ref_text_free: Optional[bool] = None
-    split_bucket: Optional[bool] = None
-    fragment_interval: Optional[float] = None
-    parallel_infer: Optional[bool] = None
-    repetition_penalty: Optional[float] = None
-    sample_steps: Optional[int] = None
-    super_sampling: Optional[bool] = None
 
 # FastAPI应用
 app = FastAPI(title="GPT-SoVITS TTS API", version="1.0.0")
@@ -362,272 +243,39 @@ else:
     print(f"前端静态文件目录不存在: {dist_path}")
     print("请先构建前端项目: cd ui && pnpm build")
 
-@app.get("/models/sovits", response_model=List[SoVITSModelInfo])
-async def get_sovits_models():
-    """获取SoVITS模型列表和当前使用模型"""
-    models = []
-    for model_name in SoVITS_names:
-        models.append(SoVITSModelInfo(
-            name=model_name,
-            path=model_name,
-            is_current=(model_name == app_state.current_sovits_model)
-        ))
-    return models
+# 注册API路由
+# 模型管理API
+models_router = create_models_router(
+    app_state, SoVITS_names, name2sovits_path, tts_pipeline, 
+    get_sovits_version_from_path_fast, dict_language_v1, dict_language_v2
+)
+app.include_router(models_router)
 
-@app.post("/models/sovits/set")
-async def set_sovits_model(model_name: str):
-    """设置当前SoVITS模型"""
-    if model_name not in SoVITS_names:
-        raise HTTPException(status_code=404, detail="Model not found")
-    
-    try:
-        # 更新模型路径
-        sovits_path = model_name
-        if "！" in sovits_path or "!" in sovits_path:
-            sovits_path = name2sovits_path[sovits_path]
-        
-        # 获取模型版本信息
-        global version, model_version
-        version, model_version, if_lora_v3 = get_sovits_version_from_path_fast(sovits_path)
-        
-        # 更新语言字典
-        app_state.dict_language = dict_language_v1 if version == "v1" else dict_language_v2
-        
-        # 加载模型
-        tts_pipeline.init_vits_weights(sovits_path)
-        app_state.current_sovits_model = model_name
-        
-        # 保存到配置文件
-        with open("./weight.json", "r") as f:
-            data = json.loads(f.read())
-            data["SoVITS"][version] = sovits_path
-        with open("./weight.json", "w") as f:
-            f.write(json.dumps(data))
-        
-        return {"message": "Model set successfully", "model": model_name}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to set model: {str(e)}")
+# 角色管理API
+characters_router = create_characters_router(app_state, character_data, get_default_happy_audio)
+app.include_router(characters_router)
 
-@app.get("/characters", response_model=List[CharacterInfo])
-async def get_characters():
-    """获取角色列表和当前角色"""
-    characters = []
-    for character_name in character_data.keys():
-        characters.append(CharacterInfo(
-            name=character_name,
-            is_current=(character_name == app_state.current_character)
-        ))
-    return characters
+# TTS API
+tts_router = create_tts_router(app_state, tts_pipeline, cut_method, temp_dir)
+app.include_router(tts_router)
 
-@app.post("/characters/set")
-async def set_character(character_name: str):
-    """设置当前角色"""
-    if character_name not in character_data:
-        raise HTTPException(status_code=404, detail="Character not found")
-    
-    # 自动选择开心音频
-    default_audio = get_default_happy_audio(character_name, character_data, "中文")
-    if not default_audio:
-        raise HTTPException(status_code=404, detail="No audio found for character")
-    
-    app_state.current_character = character_name
-    app_state.current_character_audio = default_audio
-    
-    return {
-        "message": "Character set successfully",
-        "character": character_name,
-        "audio_path": default_audio["path"],
-        "audio_text": default_audio["text"]
-    }
+# 配置管理API
+config_router = create_config_router(app_state, dist_path)
+app.include_router(config_router)
 
-@app.post("/tts")
-async def text_to_speech(request: TTSRequest):
-    """文本转语音"""
-    if not app_state.current_character or not app_state.current_character_audio:
-        raise HTTPException(status_code=400, detail="No character selected")
-    
-    try:
-        # 准备推理参数
-        seed = random.randint(0, 2**32 - 1)
-        audio_info = app_state.current_character_audio
-        
-        inputs = {
-            "text": request.text,
-            "text_lang": app_state.dict_language[app_state.inference_config["text_lang"]],
-            "ref_audio_path": audio_info["path"],
-            "aux_ref_audio_paths": [],
-            "prompt_text": audio_info["text"],
-            "prompt_lang": app_state.dict_language[app_state.inference_config["prompt_lang"]],
-            "top_k": app_state.inference_config["top_k"],
-            "top_p": app_state.inference_config["top_p"],
-            "temperature": app_state.inference_config["temperature"],
-            "text_split_method": cut_method[app_state.inference_config["text_split_method"]],
-            "batch_size": app_state.inference_config["batch_size"],
-            "speed_factor": app_state.inference_config["speed_factor"],
-            "split_bucket": app_state.inference_config["split_bucket"],
-            "return_fragment": False,
-            "fragment_interval": app_state.inference_config["fragment_interval"],
-            "seed": seed,
-            "parallel_infer": app_state.inference_config["parallel_infer"],
-            "repetition_penalty": app_state.inference_config["repetition_penalty"],
-            "sample_steps": app_state.inference_config["sample_steps"],
-            "super_sampling": app_state.inference_config["super_sampling"],
-        }
-        
-        # 执行推理，获取生成器结果
-        for result in tts_pipeline.run(inputs):
-            # result 是 (sampling_rate, audio_data) 的元组
-            sampling_rate, audio_data = result
-            break  # 只取第一个结果
-        
-        # 生成临时文件名
-        timestamp = int(time.time())
-        temp_filename = f"tts_output_{timestamp}_{seed}.wav"
-        output_path = os.path.join(temp_dir, temp_filename)
-        
-        # 保存音频文件
-        sf.write(output_path, audio_data, sampling_rate)
-        
-        return FileResponse(
-            output_path,
-            media_type="audio/wav",
-            filename=temp_filename,
-            headers={"Content-Disposition": f"attachment; filename={temp_filename}"}
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
+# API配置API
+api_config_router = create_api_config_router(dist_path)
+app.include_router(api_config_router)
 
-@app.get("/config/inference")
-async def get_inference_config():
-    """获取当前推理配置"""
-    return app_state.inference_config
+# 状态API
+status_router = create_status_router(app_state, device, version, model_version, temp_dir)
+app.include_router(status_router)
 
-@app.post("/config/inference")
-async def update_inference_config(config: InferenceConfigUpdate):
-    """更新推理配置"""
-    for key, value in config.dict(exclude_unset=True).items():
-        if hasattr(app_state.inference_config, key) or key in app_state.inference_config:
-            app_state.inference_config[key] = value
-    
-    return {"message": "Inference config updated", "config": app_state.inference_config}
-
-@app.get("/status")
-async def get_status():
-    """获取系统状态"""
-    return {
-        "current_sovits_model": app_state.current_sovits_model,
-        "current_character": app_state.current_character,
-        "current_character_audio": app_state.current_character_audio["text"] if app_state.current_character_audio else None,
-        "device": device,
-        "version": version,
-        "model_version": model_version,
-        "temp_dir": temp_dir,
-    }
-
-@app.post("/api/save-config")
-async def save_config(request: dict):
-    """保存AI配置到public目录"""
-    try:
-        config_path = os.path.join(dist_path, "ai-config.json")
-        
-        # 确保目录存在
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        
-        # 保存配置
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(request, f, ensure_ascii=False, indent=2)
-        
-        return {"message": "配置保存成功", "path": config_path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
-
-@app.get("/api/get-config")
-async def get_config():
-    """获取AI配置"""
-    try:
-        config_path = os.path.join(dist_path, "ai-config.json")
-        
-        if os.path.exists(config_path):
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            return config
-        else:
-            # 如果配置文件不存在，返回默认配置
-            default_config = {
-                "API_CONFIGS": [{
-                    "name": "默认OpenAI配置",
-                    "baseURL": "https://api.openai.com/v1",
-                    "apiKey": "your-openai-api-key",
-                    "model": "gpt-3.5-turbo",
-                    "timeout": 30000,
-                    "isDefault": True,
-                    "defaultParams": {
-                        "temperature": 0.7,
-                        "max_tokens": 1000,
-                        "top_p": 1,
-                        "frequency_penalty": 0,
-                        "presence_penalty": 0
-                    }
-                }],
-                "DEFAULT_PERSONAS": [{
-                    "id": "assistant",
-                    "name": "智能助手",
-                    "description": "友善、专业的AI助手",
-                    "prompt": "你是一个友善、专业且富有知识的AI助手。请用清晰、有帮助的方式回答用户的问题。保持礼貌和耐心，如果不确定答案，请诚实说明。"
-                }]
-            }
-            return default_config
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取配置失败: {str(e)}")
-
-# 前端路由处理
-@app.get("/", response_class=HTMLResponse)
-async def serve_frontend():
-    """服务前端首页"""
-    index_path = os.path.join(dist_path, "index.html")
-    if os.path.exists(index_path):
-        with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    else:
-        return HTMLResponse(content="<h1>前端文件未找到</h1><p>请先构建前端项目: cd ui && pnpm build</p>")
-
-@app.get("/{path:path}", response_class=HTMLResponse)
-async def serve_frontend_routes(path: str):
-    """处理前端路由（SPA模式）"""
-    # 检查是否是API路径
-    if path.startswith("models/") or path.startswith("characters/") or path.startswith("config/") or path.startswith("tts") or path.startswith("status"):
-        # 让FastAPI处理API路由
-        raise HTTPException(status_code=404, detail="API endpoint not found")
-    
-    # 检查是否是静态资源
-    static_file_path = os.path.join(dist_path, path)
-    if os.path.exists(static_file_path) and os.path.isfile(static_file_path):
-        # 根据文件扩展名返回适当的MIME类型
-        if path.endswith('.js'):
-            with open(static_file_path, "r", encoding="utf-8") as f:
-                return HTMLResponse(content=f.read(), media_type="application/javascript")
-        elif path.endswith('.css'):
-            with open(static_file_path, "r", encoding="utf-8") as f:
-                return HTMLResponse(content=f.read(), media_type="text/css")
-        elif path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.ico')):
-            return FileResponse(static_file_path)
-        else:
-            with open(static_file_path, "r", encoding="utf-8") as f:
-                return HTMLResponse(content=f.read())
-    
-    # 对于其他路径，返回index.html（SPA路由）
-    index_path = os.path.join(dist_path, "index.html")
-    if os.path.exists(index_path):
-        with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    else:
-        return HTMLResponse(content="<h1>前端文件未找到</h1><p>请先构建前端项目: cd ui && pnpm build</p>")
+# 前端服务API（放在最后，避免路由冲突）
+frontend_router = create_frontend_router(dist_path)
+app.include_router(frontend_router)
 
 # 清理函数
-import atexit
-import shutil
-
 def cleanup_temp_files():
     """清理临时文件"""
     try:
@@ -677,4 +325,4 @@ if __name__ == "__main__":
     print("="*60)
     print("按 Ctrl+C 停止服务\n")
     
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
