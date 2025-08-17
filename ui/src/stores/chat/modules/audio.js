@@ -28,31 +28,52 @@ export const audioModule = {
 
         // 设置生成状态
         message.audioGenerating = true;
+        console.log('开始生成音频:', messageId);
 
-        // 调用TTS API
-        const apiStore = useApiStore();
-        const audioBlob = await apiStore.textToSpeech(message.content);
-
-        // 创建音频URL
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        // 创建新的语音版本
-        const newVersion = {
-          id: Date.now().toString(),
-          url: audioUrl,
-          timestamp: new Date(),
-          isDefault: message.audioVersions.length === 0, // 第一个版本为默认版本
+        // 调用TTS API生成音频并保存到后端
+        const ttsRequest = {
+          text: message.content,
+          conversation_id: conversationId,
+          message_id: messageId
         };
 
-        // 如果是重新生成，添加到版本列表；如果是第一次生成，也添加到版本列表
-        message.audioVersions.push(newVersion);
+        const response = await fetch('/tts/conversation', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(ttsRequest),
+        });
 
-        // 设置当前播放版本为最新生成的版本
-        message.currentAudioVersion = message.audioVersions.length - 1;
+        if (!response.ok) {
+          throw new Error(`TTS生成失败: ${response.status}`);
+        }
 
-        message.audioGenerating = false;
+        const audioResult = await response.json();
 
-        return audioUrl;
+        // 重新加载对话数据以获取最新的音频版本信息
+        await this.loadConversations();
+
+        // 更新当前消息的音频生成状态
+        const updatedConversation = this.conversations.find(
+          (conv) => conv.id === conversationId
+        );
+        const updatedMessage = updatedConversation?.messages.find(
+          (msg) => msg.id === messageId
+        );
+        if (updatedMessage) {
+          updatedMessage.audioGenerating = false;
+          
+          // 如果是重新生成，将当前版本设置为最新生成的版本
+          if (isRegenerate && updatedMessage.audioVersions?.length > 0) {
+            const latestVersionIndex = updatedMessage.audioVersions.length - 1
+            await this.switchAudioVersion(conversationId, messageId, latestVersionIndex)
+            console.log('已切换到最新生成的音频版本:', latestVersionIndex)
+          }
+        }
+
+        console.log('音频生成完成:', audioResult.audio_url);
+        return audioResult.audio_url;
       } catch (error) {
         const conversation = this.conversations.find(
           (conv) => conv.id === conversationId
@@ -70,52 +91,62 @@ export const audioModule = {
     },
 
     // 切换语音版本
-    switchAudioVersion(conversationId, messageId, versionIndex) {
-      const conversation = this.conversations.find(
-        (conv) => conv.id === conversationId
-      );
-      if (!conversation) return;
+    async switchAudioVersion(conversationId, messageId, versionIndex) {
+      try {
+        const conversation = this.conversations.find(
+          (conv) => conv.id === conversationId
+        );
+        if (!conversation) return;
 
-      const message = conversation.messages.find((msg) => msg.id === messageId);
-      if (!message) return;
+        const message = conversation.messages.find((msg) => msg.id === messageId);
+        if (!message) return;
 
-      if (versionIndex >= 0 && versionIndex < message.audioVersions.length) {
-        message.currentAudioVersion = versionIndex;
+        if (versionIndex >= 0 && versionIndex < message.audioVersions.length) {
+          const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/audio/current?version_index=${versionIndex}`, {
+            method: 'PUT',
+          });
+
+          if (!response.ok) {
+            throw new Error(`切换音频版本失败: ${response.status}`);
+          }
+
+          // 重新加载对话数据
+          await this.loadConversations();
+        }
+      } catch (error) {
+        console.error('切换音频版本失败:', error);
+        throw error;
       }
     },
 
     // 删除语音版本
-    deleteAudioVersion(conversationId, messageId, versionIndex) {
-      const conversation = this.conversations.find(
-        (conv) => conv.id === conversationId
-      );
-      if (!conversation) return;
+    async deleteAudioVersion(conversationId, messageId, versionIndex) {
+      try {
+        const conversation = this.conversations.find(
+          (conv) => conv.id === conversationId
+        );
+        if (!conversation) return;
 
-      const message = conversation.messages.find((msg) => msg.id === messageId);
-      if (!message || !message.audioVersions) return;
+        const message = conversation.messages.find((msg) => msg.id === messageId);
+        if (!message || !message.audioVersions) return;
 
-      if (versionIndex >= 0 && versionIndex < message.audioVersions.length) {
-        // 释放URL对象
-        const version = message.audioVersions[versionIndex];
-        if (version.url) {
-          URL.revokeObjectURL(version.url);
-        }
+        if (versionIndex >= 0 && versionIndex < message.audioVersions.length) {
+          const version = message.audioVersions[versionIndex];
+          
+          const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/audio/${version.id}`, {
+            method: 'DELETE',
+          });
 
-        // 删除版本
-        message.audioVersions.splice(versionIndex, 1);
-
-        // 调整当前播放版本索引
-        if (message.currentAudioVersion === versionIndex) {
-          // 如果删除的是当前播放的版本
-          if (message.audioVersions.length === 0) {
-            message.currentAudioVersion = -1;
-          } else if (versionIndex >= message.audioVersions.length) {
-            message.currentAudioVersion = message.audioVersions.length - 1;
+          if (!response.ok) {
+            throw new Error(`删除音频版本失败: ${response.status}`);
           }
-        } else if (message.currentAudioVersion > versionIndex) {
-          // 如果删除的版本在当前版本之前，需要调整索引
-          message.currentAudioVersion--;
+
+          // 重新加载对话数据
+          await this.loadConversations();
         }
+      } catch (error) {
+        console.error('删除音频版本失败:', error);
+        throw error;
       }
     },
 

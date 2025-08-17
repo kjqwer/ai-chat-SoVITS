@@ -43,7 +43,7 @@
               <!-- 当前版本音频播放器 -->
               <audio v-if="message.currentAudioVersion >= 0 && message.audioVersions[message.currentAudioVersion]"
                 :key="`${message.id}-${message.currentAudioVersion}`" controls style="width: 100%">
-                <source :src="message.audioVersions[message.currentAudioVersion].url" type="audio/wav">
+                <source :src="getAudioUrl(message.audioVersions[message.currentAudioVersion].url)" type="audio/wav">
               </audio>
 
               <!-- 版本切换和管理 -->
@@ -184,6 +184,15 @@ const copyMessage = async (content) => {
   } catch {
     ElMessage.error('复制失败')
   }
+}
+
+// 获取音频URL
+const getAudioUrl = (url) => {
+  // 如果是相对路径，添加当前域名
+  if (url && url.startsWith('/')) {
+    return `${window.location.origin}${url}`
+  }
+  return url
 }
 
 // 格式化时间

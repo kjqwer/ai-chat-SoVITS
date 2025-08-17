@@ -178,6 +178,17 @@ watch(
   { immediate: true }
 )
 
+// 监听人格列表变化，确保当前人格ID有效
+watch(
+  () => chatStore.personas,
+  (newPersonas) => {
+    if (newPersonas.length > 0 && (!currentPersonaId.value || !newPersonas.find(p => p.id === currentPersonaId.value))) {
+      currentPersonaId.value = newPersonas[0].id
+    }
+  },
+  { immediate: true }
+)
+
 // 监听下拉框选择变化，同步到store
 watch(
   () => currentPersonaId.value,

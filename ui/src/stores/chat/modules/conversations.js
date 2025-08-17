@@ -6,6 +6,9 @@ export const conversationsModule = {
     currentConversationId: null,
     loading: {
       sendMessage: false,
+      loadConversations: false,
+      createConversation: false,
+      deleteConversation: false,
     },
     error: null,
   }),
@@ -29,39 +32,107 @@ export const conversationsModule = {
   },
 
   actions: {
+    // 从后端加载所有对话
+    async loadConversations() {
+      try {
+        this.loading.loadConversations = true;
+        this.error = null;
+
+        const response = await fetch('/api/conversations/');
+        if (!response.ok) {
+          throw new Error(`加载对话失败: ${response.status}`);
+        }
+
+        const conversations = await response.json();
+        this.conversations = conversations;
+
+        // 如果没有当前对话但有对话列表，选择第一个
+        if (!this.currentConversationId && conversations.length > 0) {
+          this.currentConversationId = conversations[0].id;
+        }
+
+        return conversations;
+      } catch (error) {
+        this.error = error.message;
+        console.error('加载对话失败:', error);
+        throw error;
+      } finally {
+        this.loading.loadConversations = false;
+      }
+    },
+
     // 创建新对话
-    createConversation(title = null, persona = null) {
-      const conversation = {
-        id: Date.now().toString(),
-        title: title || `对话 ${this.conversations.length + 1}`,
-        persona: persona,
-        messages: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+    async createConversation(title = null, persona = null) {
+      try {
+        this.loading.createConversation = true;
+        this.error = null;
 
-      this.conversations.unshift(conversation);
-      this.currentConversationId = conversation.id;
+        const conversationData = {
+          title: title || `对话 ${this.conversations.length + 1}`,
+          persona: persona || this.currentPersona
+        };
 
-      return conversation;
+        const response = await fetch('/api/conversations/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(conversationData),
+        });
+
+        if (!response.ok) {
+          throw new Error(`创建对话失败: ${response.status}`);
+        }
+
+        const conversation = await response.json();
+        this.conversations.unshift(conversation);
+        this.currentConversationId = conversation.id;
+
+        return conversation;
+      } catch (error) {
+        this.error = error.message;
+        console.error('创建对话失败:', error);
+        throw error;
+      } finally {
+        this.loading.createConversation = false;
+      }
     },
 
     // 删除对话
-    deleteConversation(conversationId) {
-      const index = this.conversations.findIndex(
-        (conv) => conv.id === conversationId
-      );
-      if (index !== -1) {
-        this.conversations.splice(index, 1);
+    async deleteConversation(conversationId) {
+      try {
+        this.loading.deleteConversation = true;
+        this.error = null;
 
-        // 如果删除的是当前对话，切换到下一个对话
-        if (this.currentConversationId === conversationId) {
-          if (this.conversations.length > 0) {
-            this.currentConversationId = this.conversations[0].id;
-          } else {
-            this.currentConversationId = null;
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error(`删除对话失败: ${response.status}`);
+        }
+
+        const index = this.conversations.findIndex(
+          (conv) => conv.id === conversationId
+        );
+        if (index !== -1) {
+          this.conversations.splice(index, 1);
+
+          // 如果删除的是当前对话，切换到下一个对话
+          if (this.currentConversationId === conversationId) {
+            if (this.conversations.length > 0) {
+              this.currentConversationId = this.conversations[0].id;
+            } else {
+              this.currentConversationId = null;
+            }
           }
         }
+      } catch (error) {
+        this.error = error.message;
+        console.error('删除对话失败:', error);
+        throw error;
+      } finally {
+        this.loading.deleteConversation = false;
       }
     },
 
@@ -71,26 +142,55 @@ export const conversationsModule = {
     },
 
     // 回溯到指定消息
-    rollbackToMessage(conversationId, messageIndex) {
-      const conversation = this.conversations.find(
-        (conv) => conv.id === conversationId
-      );
-      if (!conversation) return;
+    async rollbackToMessage(conversationId, messageIndex) {
+      try {
+        this.error = null;
 
-      // 删除指定索引之后的所有消息
-      conversation.messages = conversation.messages.slice(0, messageIndex + 1);
-      conversation.updatedAt = new Date();
+        const response = await fetch(`/api/conversations/${conversationId}/rollback/${messageIndex}`, {
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          throw new Error(`回溯失败: ${response.status}`);
+        }
+
+        // 重新加载对话数据
+        await this.loadConversations();
+      } catch (error) {
+        this.error = error.message;
+        console.error('回溯失败:', error);
+        throw error;
+      }
     },
 
     // 删除指定消息
-    deleteMessage(conversationId, messageIndex) {
-      const conversation = this.conversations.find(
-        (conv) => conv.id === conversationId
-      );
-      if (!conversation) return;
+    async deleteMessage(conversationId, messageIndex) {
+      try {
+        this.error = null;
 
-      conversation.messages.splice(messageIndex, 1);
-      conversation.updatedAt = new Date();
+        const conversation = this.conversations.find(
+          (conv) => conv.id === conversationId
+        );
+        if (!conversation) return;
+
+        const message = conversation.messages[messageIndex];
+        if (!message) return;
+
+        const response = await fetch(`/api/conversations/${conversationId}/messages/${message.id}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error(`删除消息失败: ${response.status}`);
+        }
+
+        // 重新加载对话数据
+        await this.loadConversations();
+      } catch (error) {
+        this.error = error.message;
+        console.error('删除消息失败:', error);
+        throw error;
+      }
     },
 
     // 生成对话标题
@@ -104,13 +204,31 @@ export const conversationsModule = {
     },
 
     // 更新对话人格
-    updateConversationPersona(conversationId, persona) {
-      const conversation = this.conversations.find(
-        (conv) => conv.id === conversationId
-      );
-      if (conversation) {
-        conversation.persona = persona;
-        conversation.updatedAt = new Date();
+    async updateConversationPersona(conversationId, persona) {
+      try {
+        const conversation = this.conversations.find(
+          (conv) => conv.id === conversationId
+        );
+        if (conversation) {
+          // 更新后端数据
+          const response = await fetch(`/api/conversations/${conversationId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ persona: persona }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`更新对话人格失败: ${response.status}`);
+          }
+
+          // 重新加载对话数据以确保同步
+          await this.loadConversations();
+        }
+      } catch (error) {
+        console.error('更新对话人格失败:', error);
+        throw error;
       }
     },
 

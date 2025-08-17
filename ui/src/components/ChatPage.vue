@@ -94,19 +94,39 @@ const sendMessage = async (messageText) => {
                 if (lastMessage.role === 'assistant') {
                     // 等待音频生成完成后自动播放
                     const checkAudioGeneration = () => {
-                        if (lastMessage.audioVersions?.length > 0 && !lastMessage.audioGenerating) {
-                            const audioUrl = lastMessage.audioVersions[0]?.url
-                            if (audioUrl) {
-                                autoPlayGeneratedAudio(audioUrl)
+                        // 重新获取最新的对话数据
+                        const updatedConv = chatStore.conversations.find(conv => conv.id === currentConv.id)
+                        if (updatedConv) {
+                            const updatedMessage = updatedConv.messages.find(msg => msg.id === lastMessage.id)
+                            if (updatedMessage) {
+                                if (updatedMessage.audioVersions?.length > 0 && !updatedMessage.audioGenerating) {
+                                    const currentVersion = updatedMessage.currentAudioVersion >= 0 ? updatedMessage.currentAudioVersion : 0
+                                    const audioUrl = updatedMessage.audioVersions[currentVersion]?.url
+                                    if (audioUrl) {
+                                        autoPlayGeneratedAudio(audioUrl)
+                                        return // 找到音频，停止检查
+                                    }
+                                } else if (updatedMessage.audioGenerating) {
+                                    // 如果还在生成中，继续等待
+                                    setTimeout(checkAudioGeneration, 1000)
+                                    return
+                                }
                             }
-                        } else if (lastMessage.audioGenerating) {
-                            // 如果还在生成中，继续等待
-                            setTimeout(checkAudioGeneration, 500)
+                        }
+                        
+                        // 如果检查了10次（10秒）还没有音频，停止检查
+                        if (checkAudioGeneration.count === undefined) {
+                            checkAudioGeneration.count = 0
+                        }
+                        checkAudioGeneration.count++
+                        
+                        if (checkAudioGeneration.count < 10) {
+                            setTimeout(checkAudioGeneration, 1000)
                         }
                     }
 
                     // 延迟检查，给音频生成一些时间
-                    setTimeout(checkAudioGeneration, 1000)
+                    setTimeout(checkAudioGeneration, 2000)
                 }
             }
         }
@@ -121,19 +141,27 @@ const generateAudio = async (conversationId, messageId, isRegenerate = false) =>
         await chatStore.generateMessageAudio(conversationId, messageId, isRegenerate)
         ElMessage.success('语音生成成功')
 
-        // 如果开启了自动播放，播放生成的音频
+        // 如果开启了自动播放，播放最新生成的音频
         if (autoPlayAudio.value) {
-            const message = chatStore.conversations
-                .find(conv => conv.id === conversationId)?.messages
-                .find(msg => msg.id === messageId)
+            // 等待一下让后端数据更新完成
+            setTimeout(async () => {
+                // 重新加载对话数据以确保获取最新的音频版本
+                await chatStore.loadConversations()
+                
+                const message = chatStore.conversations
+                    .find(conv => conv.id === conversationId)?.messages
+                    .find(msg => msg.id === messageId)
 
-            if (message?.audioVersions?.length > 0) {
-                const currentVersion = message.currentAudioVersion >= 0 ? message.currentAudioVersion : 0
-                const audioUrl = message.audioVersions[currentVersion]?.url
-                if (audioUrl) {
-                    autoPlayGeneratedAudio(audioUrl)
+                if (message?.audioVersions?.length > 0) {
+                    // 播放最新生成的音频版本（最后一个版本）
+                    const latestVersionIndex = message.audioVersions.length - 1
+                    const audioUrl = message.audioVersions[latestVersionIndex]?.url
+                    if (audioUrl) {
+                        console.log('自动播放最新生成的音频:', audioUrl)
+                        autoPlayGeneratedAudio(audioUrl)
+                    }
                 }
-            }
+            }, 1000) // 等待1秒确保后端数据更新完成
         }
     } catch (error) {
         ElMessage.error('语音生成失败')
@@ -141,9 +169,9 @@ const generateAudio = async (conversationId, messageId, isRegenerate = false) =>
 }
 
 // 切换音频版本
-const switchAudioVersion = (conversationId, messageId, versionIndex) => {
+const switchAudioVersion = async (conversationId, messageId, versionIndex) => {
     try {
-        chatStore.switchAudioVersion(conversationId, messageId, versionIndex)
+        await chatStore.switchAudioVersion(conversationId, messageId, versionIndex)
         ElMessage.success('已切换到语音版本')
     } catch (error) {
         ElMessage.error('切换语音版本失败')
@@ -158,10 +186,12 @@ const deleteAudioVersion = async (conversationId, messageId, versionIndex) => {
             '确认删除',
             { type: 'warning' }
         )
-        chatStore.deleteAudioVersion(conversationId, messageId, versionIndex)
+        await chatStore.deleteAudioVersion(conversationId, messageId, versionIndex)
         ElMessage.success('语音版本已删除')
-    } catch {
-        // 用户取消
+    } catch (error) {
+        if (error !== 'cancel') {
+            ElMessage.error('删除语音版本失败')
+        }
     }
 }
 
@@ -223,8 +253,11 @@ const autoPlayGeneratedAudio = (audioUrl) => {
             currentPlayingAudio.value.currentTime = 0
         }
 
+        // 处理音频URL
+        const fullAudioUrl = audioUrl.startsWith('/') ? `${window.location.origin}${audioUrl}` : audioUrl
+
         // 创建新的Audio对象并播放
-        const audio = new Audio(audioUrl)
+        const audio = new Audio(fullAudioUrl)
         currentPlayingAudio.value = audio
 
         audio.onended = () => {
@@ -275,8 +308,16 @@ onMounted(async () => {
         console.warn('API数据初始化失败:', error)
     }
 
-    if (chatStore.conversations.length === 0) {
-        chatStore.createConversationWithCurrentPersona('欢迎对话')
+    // 从后端加载对话数据
+    try {
+        await chatStore.loadConversations()
+        console.log('对话数据加载完成')
+    } catch (error) {
+        console.warn('对话数据加载失败:', error)
+        // 如果加载失败，创建一个新对话
+        if (chatStore.conversations.length === 0) {
+            await chatStore.createConversationWithCurrentPersona('欢迎对话')
+        }
     }
 
     // 初始化ASR功能

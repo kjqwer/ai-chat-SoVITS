@@ -14,7 +14,11 @@ export const personasModule = {
 
       // 如果当前有对话，更新对话的人格设置
       if (this.currentConversationId) {
-        this.updateConversationPersona(this.currentConversationId, persona);
+        try {
+          await this.updateConversationPersona(this.currentConversationId, persona);
+        } catch (error) {
+          console.error("更新对话人格失败:", error);
+        }
       }
 
       // 刷新API store中的系统状态
@@ -37,7 +41,11 @@ export const personasModule = {
             Array.isArray(config.DEFAULT_PERSONAS)
           ) {
             this.personas = config.DEFAULT_PERSONAS;
-            this.currentPersona = config.DEFAULT_PERSONAS[0];
+            
+            // 只有在没有当前人格或当前人格不在新列表中时才设置默认人格
+            if (!this.currentPersona || !this.personas.find(p => p.id === this.currentPersona.id)) {
+              this.currentPersona = config.DEFAULT_PERSONAS[0];
+            }
           }
         }
       } catch (error) {

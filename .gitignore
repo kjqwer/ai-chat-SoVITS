@@ -7,3 +7,4 @@ __pycache__/
 ai-config.json
 24kto48k/
 asr_models/
+data/

@@ -63,6 +63,7 @@ from apis.tts_api import create_tts_router
 from apis.config_api import create_config_router, create_api_config_router
 from apis.status_api import create_status_router
 from apis.frontend_api import create_frontend_router
+from apis.conversations_api import create_conversations_router
 
 # 初始化i18n
 language = os.environ.get("language", "Auto")
@@ -270,6 +271,10 @@ app.include_router(api_config_router)
 # 状态API
 status_router = create_status_router(app_state, device, version, model_version, temp_dir)
 app.include_router(status_router)
+
+# 对话管理API
+conversations_router = create_conversations_router()
+app.include_router(conversations_router)
 
 # 前端服务API（放在最后，避免路由冲突）
 frontend_router = create_frontend_router(dist_path)
