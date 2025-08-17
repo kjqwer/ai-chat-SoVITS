@@ -29,7 +29,7 @@ export const messagesModule = {
         );
 
         if (!conversation) {
-          conversation = this.createConversation();
+          conversation = this.createConversationWithCurrentPersona();
         }
 
         // 添加用户消息

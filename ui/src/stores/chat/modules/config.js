@@ -12,9 +12,6 @@ export const configModule = {
 
       await initializeConfig();
 
-      // 加载人格配置
-      await this.loadPersonas();
-
       // 迁移旧的音频数据结构
       this.migrateAudioData();
 

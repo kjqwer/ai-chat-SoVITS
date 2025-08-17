@@ -13,9 +13,8 @@ export const personasModule = {
       this.currentPersona = persona;
 
       // 如果当前有对话，更新对话的人格设置
-      if (this.currentConversation) {
-        this.currentConversation.persona = persona;
-        this.currentConversation.updatedAt = new Date();
+      if (this.currentConversationId) {
+        this.updateConversationPersona(this.currentConversationId, persona);
       }
 
       // 刷新API store中的系统状态

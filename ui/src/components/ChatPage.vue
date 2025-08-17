@@ -265,10 +265,10 @@ onUnmounted(() => {
 
 // 组件挂载时初始化配置并创建第一个对话（如果没有的话）
 onMounted(async () => {
-    await chatStore.initializeConfig()
+    await chatStore.initializeChatStore()
 
     if (chatStore.conversations.length === 0) {
-        chatStore.createConversation('欢迎对话')
+        chatStore.createConversationWithCurrentPersona('欢迎对话')
     }
 
     // 初始化ASR功能
