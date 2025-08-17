@@ -27,6 +27,11 @@ export const charactersModule = {
         const currentChar = this.getCurrentCharacter;
         this.currentCharacter = currentChar?.name || null;
 
+        // 如果没有当前角色，自动设置第一个角色
+        if (!this.currentCharacter && this.characters.length > 0) {
+          await this.setCharacter(this.characters[0].name);
+        }
+
         return data;
       } catch (error) {
         this.error = error.response?.data?.detail || error.message;

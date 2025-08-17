@@ -267,6 +267,14 @@ onUnmounted(() => {
 onMounted(async () => {
     await chatStore.initializeChatStore()
 
+    // 初始化API数据
+    try {
+        await apiStore.initializeData()
+        console.log('API数据初始化完成')
+    } catch (error) {
+        console.warn('API数据初始化失败:', error)
+    }
+
     if (chatStore.conversations.length === 0) {
         chatStore.createConversationWithCurrentPersona('欢迎对话')
     }
