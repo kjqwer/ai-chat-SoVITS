@@ -40,7 +40,9 @@
 
                 <!-- 输入区域 -->
                 <MessageInput ref="messageInputRef" :speechRecognitionEnabled="speechRecognitionEnabled"
-                    @sendMessage="sendMessage" />
+                    @sendMessage="sendMessage" 
+                    @audioPlaybackStarted="handleRealtimeAudioPlaybackStarted"
+                    @audioPlaybackEnded="handleRealtimeAudioPlaybackEnded" />
             </div>
         </div>
 
@@ -276,6 +278,20 @@ const autoPlayGeneratedAudio = (audioUrl) => {
     } catch (error) {
         console.error('音频播放出错:', error)
     }
+}
+
+// 处理实时语音音频播放开始
+const handleRealtimeAudioPlaybackStarted = () => {
+    console.log('实时语音：音频播放开始')
+    // 设置全局音频播放状态
+    window.isRealtimeAudioPlaying = true
+}
+
+// 处理实时语音音频播放结束
+const handleRealtimeAudioPlaybackEnded = () => {
+    console.log('实时语音：音频播放结束')
+    // 清除全局音频播放状态
+    window.isRealtimeAudioPlaying = false
 }
 
 // 清理资源

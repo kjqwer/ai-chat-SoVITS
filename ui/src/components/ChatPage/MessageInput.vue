@@ -3,15 +3,9 @@
     <div class="input-container">
       <!-- 文本输入区域 -->
       <div class="text-input-section">
-        <el-input 
-          v-model="inputMessage" 
-          type="textarea" 
-          :rows="3" 
-          placeholder="输入你的消息或按住右侧麦克风按钮录音..."
-          @keydown.ctrl.enter="handleSendMessage" 
-          :disabled="chatStore.loading.sendMessage || isRecording"
-          class="message-input"
-        />
+        <el-input v-model="inputMessage" type="textarea" :rows="3" placeholder="输入你的消息或按住右侧麦克风按钮录音..."
+          @keydown.ctrl.enter="handleSendMessage" :disabled="chatStore.loading.sendMessage || isRecording"
+          class="message-input" />
 
         <div class="input-actions">
           <div class="input-hint">
@@ -23,13 +17,8 @@
               正在录音中，松开停止
             </span>
           </div>
-          <el-button 
-            type="primary" 
-            @click="handleSendMessage" 
-            :loading="chatStore.loading.sendMessage"
-            :disabled="!inputMessage.trim() || isRecording"
-            class="send-button"
-          >
+          <el-button type="primary" @click="handleSendMessage" :loading="chatStore.loading.sendMessage"
+            :disabled="!inputMessage.trim() || isRecording" class="send-button">
             <el-icon>
               <Position />
             </el-icon>
@@ -41,23 +30,39 @@
       <!-- 语音输入按钮-->
       <div class="voice-input-section" v-if="speechRecognitionEnabled">
         <div class="voice-button-container">
+          <!-- 实时语音按钮 -->
+          <el-button 
+            type="success" 
+            :icon="VideoCamera"
+            @click="toggleRealtimeMode"
+            :loading="apiStore.loading"
+            circle 
+            size="large" 
+            class="realtime-voice-button"
+            :class="{ 'active': isRealtimeActive }"
+            title="实时语音对话"
+          >
+          </el-button>
+
+          <!-- 传统录音按钮 -->
           <el-button 
             :type="isRecording ? 'danger' : 'primary'" 
             :icon="isRecording ? VideoPause : Microphone"
             @mousedown="startRecording" 
-            @mouseup="stopRecording"
+            @mouseup="stopRecording" 
             @mouseleave="stopRecording"
-            @touchstart="handleTouchStart"
-            @touchend="handleTouchEnd"
+            @touchstart="handleTouchStart" 
+            @touchend="handleTouchEnd" 
             @touchcancel="handleTouchEnd"
             :loading="apiStore.loading" 
-            circle
+            circle 
             size="large" 
             class="voice-button"
             :class="{ 'recording': isRecording, 'pressing': isPressing }"
+            title="按住录音"
           >
           </el-button>
-          
+
           <!-- 录音状态指示器 -->
           <div v-if="isRecording" class="recording-indicator">
             <div class="recording-dots">
@@ -67,14 +72,29 @@
             </div>
             <div class="recording-time">{{ formatRecordingTime(recordingTime) }}</div>
           </div>
-          
+
           <!-- 提示文字 -->
-          <div class="voice-hint" v-if="!isRecording">
+          <div class="voice-hint" v-if="!isRecording && !isRealtimeActive">
             {{ isPressing ? '松开结束' : '按住录音' }}
+          </div>
+          
+          <!-- 实时语音状态 -->
+          <div class="realtime-hint" v-if="isRealtimeActive">
+            实时对话中
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 实时语音对话组件 -->
+    <RealTimeVoiceChat
+      v-if="isRealtimeActive"
+      :enabled="speechRecognitionEnabled"
+      @messageRecognized="handleRealtimeMessage"
+      @stateChanged="handleRealtimeStateChange"
+      @audioPlaybackStarted="handleRealtimeAudioPlaybackStarted"
+      @audioPlaybackEnded="handleRealtimeAudioPlaybackEnded"
+    />
   </div>
 </template>
 
@@ -86,8 +106,10 @@ import { useApiStore } from '../../stores/api.js'
 import {
   Microphone,
   Position,
-  VideoPause
+  VideoPause,
+  VideoCamera
 } from '@element-plus/icons-vue'
+import RealTimeVoiceChat from './RealTimeVoiceChat.vue'
 
 const chatStore = useChatStore()
 const apiStore = useApiStore()
@@ -101,12 +123,13 @@ const props = defineProps({
 })
 
 // 事件定义
-const emit = defineEmits(['sendMessage'])
+const emit = defineEmits(['sendMessage', 'audioPlaybackStarted', 'audioPlaybackEnded'])
 
 // 响应式数据
 const inputMessage = ref('')
 const isRecording = ref(false)
 const isPressing = ref(false)
+const isRealtimeActive = ref(false)
 const mediaRecorder = ref(null)
 const audioChunks = ref([])
 const recordingTime = ref(0)
@@ -119,6 +142,54 @@ const handleSendMessage = () => {
 
   emit('sendMessage', inputMessage.value)
   inputMessage.value = ''
+}
+
+// 切换实时语音模式
+const toggleRealtimeMode = () => {
+  if (isRealtimeActive.value) {
+    stopRealtimeMode()
+  } else {
+    startRealtimeMode()
+  }
+}
+
+// 启动实时语音模式
+const startRealtimeMode = () => {
+  isRealtimeActive.value = true
+  // 如果正在录音，先停止
+  if (isRecording.value) {
+    stopRecording()
+  }
+}
+
+// 停止实时语音模式
+const stopRealtimeMode = () => {
+  isRealtimeActive.value = false
+}
+
+// 处理实时语音识别结果
+const handleRealtimeMessage = (data) => {
+  if (data.autoSend) {
+    // 自动发送模式，直接发送消息给ChatPage
+    emit('sendMessage', data.text)
+  } else {
+    // 手动模式，填入输入框
+    inputMessage.value = data.text
+  }
+}
+
+// 处理实时语音状态变化
+const handleRealtimeStateChange = (state) => {
+  isRealtimeActive.value = state.active
+}
+
+// 处理实时语音音频播放事件
+const handleRealtimeAudioPlaybackStarted = () => {
+  emit('audioPlaybackStarted')
+}
+
+const handleRealtimeAudioPlaybackEnded = () => {
+  emit('audioPlaybackEnded')
 }
 
 // 触摸开始处理
@@ -332,6 +403,9 @@ const cleanupRecording = () => {
   if (isRecording.value) {
     stopRecording()
   }
+  if (isRealtimeActive.value) {
+    stopRealtimeMode()
+  }
   if (recordingTimer.value) {
     clearInterval(recordingTimer.value)
     recordingTimer.value = null
@@ -346,7 +420,10 @@ onUnmounted(() => {
 // 暴露方法给父组件
 defineExpose({
   cleanupRecording,
-  inputMessage
+  inputMessage,
+  startRealtimeMode,
+  stopRealtimeMode,
+  isRealtimeActive
 })
 </script>
 
@@ -362,7 +439,8 @@ defineExpose({
   max-width: 800px;
   margin: 0 auto;
   display: flex;
-  align-items: center; /* 改为center，让子元素在容器中垂直居中 */
+  align-items: center;
+  /* 改为center，让子元素在容器中垂直居中 */
   gap: 15px;
 }
 
@@ -431,7 +509,8 @@ defineExpose({
 
 /* 语音输入相关样式 */
 .voice-input-section {
-  flex: 0 0 auto; /* 固定宽度 */
+  flex: 0 0 auto;
+  /* 固定宽度 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -469,11 +548,57 @@ defineExpose({
 }
 
 .voice-button.pressing {
-  background-color: #409eff !important; /* 按压状态下的背景色 */
+  background-color: #409eff !important;
+  /* 按压状态下的背景色 */
   border-color: #409eff !important;
   color: white !important;
   transform: scale(1.1);
   box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
+}
+
+/* 实时语音按钮样式 */
+.realtime-voice-button {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 22px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50% !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 8px;
+}
+
+.realtime-voice-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.realtime-voice-button.active {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  color: white !important;
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(103, 194, 58, 0.4);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 20px rgba(103, 194, 58, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(103, 194, 58, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(103, 194, 58, 0.4);
+  }
+}
+
+.realtime-hint {
+  color: #67c23a;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 5px;
+  font-weight: 500;
 }
 
 .recording-indicator {
@@ -500,9 +625,17 @@ defineExpose({
   animation: pulse 1.5s infinite;
 }
 
-.recording-dots span:nth-child(1) { animation-delay: -0.32s; }
-.recording-dots span:nth-child(2) { animation-delay: -0.16s; }
-.recording-dots span:nth-child(3) { animation-delay: 0s; }
+.recording-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.recording-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.recording-dots span:nth-child(3) {
+  animation-delay: 0s;
+}
 
 @keyframes pulse {
   0% {
