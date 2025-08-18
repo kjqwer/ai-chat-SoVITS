@@ -1,44 +1,78 @@
 <template>
   <div class="input-area">
     <div class="input-container">
-      <div class="input-with-voice">
-        <el-input v-model="inputMessage" type="textarea" :rows="3" placeholder="输入你的消息或点击麦克风按钮录音..."
-          @keydown.ctrl.enter="handleSendMessage" :disabled="chatStore.loading.sendMessage || isRecording" />
+      <!-- 文本输入区域 -->
+      <div class="text-input-section">
+        <el-input 
+          v-model="inputMessage" 
+          type="textarea" 
+          :rows="3" 
+          placeholder="输入你的消息或按住右侧麦克风按钮录音..."
+          @keydown.ctrl.enter="handleSendMessage" 
+          :disabled="chatStore.loading.sendMessage || isRecording"
+          class="message-input"
+        />
 
-        <!-- 语音输入按钮 -->
-        <div class="voice-input-button" v-if="speechRecognitionEnabled">
-          <el-button :type="isRecording ? 'danger' : 'default'" :icon="isRecording ? VideoPause : Microphone"
-            @click="isRecording ? stopRecording() : startRecording()" :loading="apiStore.loading.asr" circle
-            size="large" class="record-button">
-          </el-button>
-
-          <!-- 录音时间显示 -->
-          <div v-if="isRecording" class="recording-time">
-            <el-icon class="recording-icon">
-              <Microphone />
-            </el-icon>
-            {{ formatRecordingTime(recordingTime) }}
+        <div class="input-actions">
+          <div class="input-hint">
+            <span>Ctrl + Enter 发送</span>
+            <span v-if="speechRecognitionEnabled && !isRecording" class="voice-hint-text">
+              • 按住右侧麦克风录音
+            </span>
+            <span v-if="isRecording" class="recording-hint">
+              正在录音中，松开停止
+            </span>
           </div>
+          <el-button 
+            type="primary" 
+            @click="handleSendMessage" 
+            :loading="chatStore.loading.sendMessage"
+            :disabled="!inputMessage.trim() || isRecording"
+            class="send-button"
+          >
+            <el-icon>
+              <Position />
+            </el-icon>
+            发送
+          </el-button>
         </div>
       </div>
 
-      <div class="input-actions">
-        <div class="input-hint">
-          <span>Ctrl + Enter 发送</span>
-          <span v-if="speechRecognitionEnabled && !isRecording" class="voice-hint">
-            • 点击麦克风录音
-          </span>
-          <span v-if="isRecording" class="recording-hint">
-            正在录音中，再次点击停止
-          </span>
+      <!-- 语音输入按钮-->
+      <div class="voice-input-section" v-if="speechRecognitionEnabled">
+        <div class="voice-button-container">
+          <el-button 
+            :type="isRecording ? 'danger' : 'primary'" 
+            :icon="isRecording ? VideoPause : Microphone"
+            @mousedown="startRecording" 
+            @mouseup="stopRecording"
+            @mouseleave="stopRecording"
+            @touchstart="handleTouchStart"
+            @touchend="handleTouchEnd"
+            @touchcancel="handleTouchEnd"
+            :loading="apiStore.loading" 
+            circle
+            size="large" 
+            class="voice-button"
+            :class="{ 'recording': isRecording, 'pressing': isPressing }"
+          >
+          </el-button>
+          
+          <!-- 录音状态指示器 -->
+          <div v-if="isRecording" class="recording-indicator">
+            <div class="recording-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="recording-time">{{ formatRecordingTime(recordingTime) }}</div>
+          </div>
+          
+          <!-- 提示文字 -->
+          <div class="voice-hint" v-if="!isRecording">
+            {{ isPressing ? '松开结束' : '按住录音' }}
+          </div>
         </div>
-        <el-button type="primary" @click="handleSendMessage" :loading="chatStore.loading.sendMessage"
-          :disabled="!inputMessage.trim() || isRecording">
-          <el-icon>
-            <Position />
-          </el-icon>
-          发送
-        </el-button>
       </div>
     </div>
   </div>
@@ -72,10 +106,12 @@ const emit = defineEmits(['sendMessage'])
 // 响应式数据
 const inputMessage = ref('')
 const isRecording = ref(false)
+const isPressing = ref(false)
 const mediaRecorder = ref(null)
 const audioChunks = ref([])
 const recordingTime = ref(0)
 const recordingTimer = ref(null)
+const touchStartTime = ref(0)
 
 // 发送消息
 const handleSendMessage = () => {
@@ -85,10 +121,29 @@ const handleSendMessage = () => {
   inputMessage.value = ''
 }
 
-// ==================== 语音识别相关方法 ====================
+// 触摸开始处理
+const handleTouchStart = (event) => {
+  event.preventDefault()
+  touchStartTime.value = Date.now()
+  isPressing.value = true
+  startRecording()
+}
+
+// 触摸结束处理
+const handleTouchEnd = (event) => {
+  event.preventDefault()
+  isPressing.value = false
+  // 防止误触，如果按住时间太短就不录音
+  const pressDuration = Date.now() - touchStartTime.value
+  if (pressDuration > 100) {
+    stopRecording()
+  }
+}
 
 // 开始录音
 const startRecording = async () => {
+  if (isRecording.value) return // 防止重复启动
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -152,6 +207,7 @@ const stopRecording = () => {
   if (mediaRecorder.value && isRecording.value) {
     mediaRecorder.value.stop()
     isRecording.value = false
+    isPressing.value = false
 
     if (recordingTimer.value) {
       clearInterval(recordingTimer.value)
@@ -305,6 +361,16 @@ defineExpose({
 .input-container {
   max-width: 800px;
   margin: 0 auto;
+  display: flex;
+  align-items: center; /* 改为center，让子元素在容器中垂直居中 */
+  gap: 15px;
+}
+
+.text-input-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .input-actions {
@@ -324,6 +390,13 @@ defineExpose({
 
 .voice-hint {
   color: #409eff;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 5px;
+}
+
+.voice-hint-text {
+  color: #409eff;
 }
 
 .recording-hint {
@@ -331,33 +404,79 @@ defineExpose({
   font-weight: 500;
 }
 
-/* 语音输入相关样式 */
-.input-with-voice {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
+/* 输入框样式 */
+.message-input {
+  border-radius: 12px;
+  transition: all 0.3s ease;
 }
 
-.voice-input-button {
+.message-input:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.message-input:focus-within {
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+/* 发送按钮样式 */
+.send-button {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.send-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+/* 语音输入相关样式 */
+.voice-input-section {
+  flex: 0 0 auto; /* 固定宽度 */
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
 }
 
-.record-button {
-  width: 50px !important;
-  height: 50px !important;
-  font-size: 20px;
-  transition: all 0.3s ease;
+.voice-button-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
-.record-button:hover {
+.voice-button {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 22px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50% !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.voice-button:hover {
   transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
-.recording-time {
+.voice-button.recording {
+  background-color: #f56c6c !important;
+  border-color: #f56c6c !important;
+  color: white !important;
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(245, 108, 108, 0.4);
+}
+
+.voice-button.pressing {
+  background-color: #409eff !important; /* 按压状态下的背景色 */
+  border-color: #409eff !important;
+  color: white !important;
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
+}
+
+.recording-indicator {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -367,10 +486,23 @@ defineExpose({
   white-space: nowrap;
 }
 
-.recording-icon {
-  color: #f56c6c;
+.recording-dots {
+  display: flex;
+  gap: 2px;
+}
+
+.recording-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #f56c6c;
+  border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
+
+.recording-dots span:nth-child(1) { animation-delay: -0.32s; }
+.recording-dots span:nth-child(2) { animation-delay: -0.16s; }
+.recording-dots span:nth-child(3) { animation-delay: 0s; }
 
 @keyframes pulse {
   0% {
