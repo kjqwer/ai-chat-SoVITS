@@ -4,7 +4,13 @@
 
 ## 视频演示
 
-观看完整功能演示：[视频演示.mp4](show/视频演示.mp4)
+观看完整功能演示：
+
+<video width="100%" controls>
+  <source src="https://sywb.top/Staticfiles/%E8%A7%86%E9%A2%91%E6%BC%94%E7%A4%BA.mp4" type="video/mp4">
+  您的浏览器不支持视频播放。
+</video>
+
 
 ## 快速开始
 
