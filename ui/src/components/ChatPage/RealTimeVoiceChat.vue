@@ -223,7 +223,7 @@ const vadCheckInterval = ref(null)
 
 // 设置
 const settings = ref({
-  silenceThreshold: 3.0,        // 静音检测阈值（秒）- 增加阈值，避免说话中停顿被截断
+  silenceThreshold: 1.5,        // 静音检测阈值（秒）- 降低阈值，让录音更快停止
   minSpeechDuration: 1.0,       // 最小语音长度（秒）
   maxSpeechDuration: 30.0,      // 最大语音长度（秒）
   autoSend: true,               // 自动发送
@@ -233,7 +233,7 @@ const settings = ref({
   debugMode: false,              // 调试模式
   // 新增：智能停顿检测
   smartPauseDetection: true,    // 启用智能停顿检测
-  pauseGracePeriod: 1.0        // 停顿宽限期（秒），在检测到语音后给予额外时间
+  pauseGracePeriod: 0.5        // 停顿宽限期（秒）- 降低宽限期
 })
 
 // 计算属性
@@ -430,12 +430,15 @@ const startSilenceDetection = () => {
         }
       }
       
-      // 如果静音时间超过有效阈值，停止录音
-      if (silenceTime.value >= effectiveThreshold) {
+      // 如果静音时间超过阈值，停止录音
+      if (silenceTime.value >= settings.value.silenceThreshold) {
         if (settings.value.debugMode) {
-          console.log('静音时间超过有效阈值，停止录音')
+          console.log('静音时间超过阈值，停止录音，有效语音:', hasValidSpeech.value)
         }
         stopCurrentRecording()
+        // 停止VAD检测
+        clearInterval(vadCheckInterval.value)
+        vadCheckInterval.value = null
       }
     }, 1000)
   }
@@ -471,7 +474,7 @@ const startVadDetection = () => {
     const energy = dataArray.value.reduce((sum, value) => sum + value, 0) / dataArray.value.length
     
     // 检测是否有语音活动（降低阈值，使其更容易检测到语音）
-    const isSpeech = energy > 15 // 降低阈值
+    const isSpeech = energy > 20 // 降低阈值
     
     if (isSpeech) {
       // 检测到语音，重置静音时间
