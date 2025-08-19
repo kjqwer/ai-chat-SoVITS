@@ -2,18 +2,11 @@
   <div class="realtime-voice-chat">
     <!-- 主控制按钮 -->
     <div class="control-section">
-      <el-button
-        :type="isActive ? 'danger' : 'success'"
-        :icon="isActive ? VideoPause : Microphone"
-        @click="toggleRealtimeMode"
-        :loading="apiStore.loading"
-        circle
-        size="large"
-        class="realtime-button"
-        :class="{ 'active': isActive, 'listening': isListening }"
-      >
+      <el-button :type="isActive ? 'danger' : 'success'" :icon="isActive ? VideoPause : Microphone"
+        @click="toggleRealtimeMode" :loading="apiStore.loading" circle size="large" class="realtime-button"
+        :class="{ 'active': isActive, 'listening': isListening }">
       </el-button>
-      
+
       <!-- 状态指示器 -->
       <div class="status-indicator" v-if="isActive">
         <div class="status-text">{{ statusText }}</div>
@@ -23,17 +16,10 @@
           <span></span>
         </div>
       </div>
-      
+
       <!-- 设置按钮 -->
-      <el-button
-        type="text"
-        :icon="Setting"
-        @click="showSettings = !showSettings"
-        circle
-        size="small"
-        class="settings-button"
-        title="设置"
-      >
+      <el-button type="text" :icon="Setting" @click="showSettings = !showSettings" circle size="small"
+        class="settings-button" title="设置">
       </el-button>
     </div>
 
@@ -44,46 +30,33 @@
           <div class="card-header">
             <span>实时语音设置</span>
             <el-button type="text" @click="showSettings = false">
-              <el-icon><Close /></el-icon>
+              <el-icon>
+                <Close />
+              </el-icon>
             </el-button>
           </div>
         </template>
-        
+
         <div class="settings-content">
           <!-- 语音检测设置 -->
           <div class="setting-group">
             <h4>语音检测</h4>
             <el-form :model="settings" label-width="120px">
               <el-form-item label="静音检测时间">
-                <el-input-number
-                  v-model="settings.silenceThreshold"
-                  :min="1"
-                  :max="10"
-                  :step="0.5"
-                  controls-position="right"
-                />
+                <el-input-number v-model="settings.silenceThreshold" :min="1" :max="10" :step="0.5"
+                  controls-position="right" />
                 <span class="unit">秒</span>
               </el-form-item>
-              
+
               <el-form-item label="最小语音长度">
-                <el-input-number
-                  v-model="settings.minSpeechDuration"
-                  :min="0.5"
-                  :max="5"
-                  :step="0.1"
-                  controls-position="right"
-                />
+                <el-input-number v-model="settings.minSpeechDuration" :min="0.5" :max="5" :step="0.1"
+                  controls-position="right" />
                 <span class="unit">秒</span>
               </el-form-item>
-              
+
               <el-form-item label="最大语音长度">
-                <el-input-number
-                  v-model="settings.maxSpeechDuration"
-                  :min="5"
-                  :max="60"
-                  :step="1"
-                  controls-position="right"
-                />
+                <el-input-number v-model="settings.maxSpeechDuration" :min="5" :max="60" :step="1"
+                  controls-position="right" />
                 <span class="unit">秒</span>
               </el-form-item>
             </el-form>
@@ -96,22 +69,14 @@
               <el-form-item label="启用自动发送">
                 <el-switch v-model="settings.autoSend" />
               </el-form-item>
-              
+
               <el-form-item label="置信度阈值" v-if="settings.autoSend">
-                <el-slider
-                  v-model="settings.confidenceThreshold"
-                  :min="0"
-                  :max="1"
-                  :step="0.1"
-                  :format-tooltip="(val) => `${(val * 100).toFixed(0)}%`"
-                />
+                <el-slider v-model="settings.confidenceThreshold" :min="0" :max="1" :step="0.1"
+                  :format-tooltip="(val) => `${(val * 100).toFixed(0)}%`" />
               </el-form-item>
-              
+
               <el-form-item label="关键词触发" v-if="settings.autoSend">
-                <el-input
-                  v-model="settings.triggerKeywords"
-                  placeholder="输入触发关键词，用逗号分隔"
-                />
+                <el-input v-model="settings.triggerKeywords" placeholder="输入触发关键词，用逗号分隔" />
               </el-form-item>
             </el-form>
           </div>
@@ -123,7 +88,7 @@
               <el-form-item label="使用VAD">
                 <el-switch v-model="settings.useVad" />
               </el-form-item>
-              
+
               <el-form-item label="调试模式">
                 <el-switch v-model="settings.debugMode" />
               </el-form-item>
@@ -229,7 +194,7 @@ const settings = ref({
   autoSend: true,               // 自动发送
   confidenceThreshold: 0.5,     // 置信度阈值
   triggerKeywords: '',          // 触发关键词
-  useVad: true,                
+  useVad: true,
   debugMode: false,              // 调试模式
   // 新增：智能停顿检测
   smartPauseDetection: true,    // 启用智能停顿检测
@@ -291,17 +256,17 @@ const startRealtimeMode = async () => {
 
     // 初始化录音
     await initializeRecording(stream)
-    
+
     isActive.value = true
     currentState.value = 'listening'
     isListening.value = true
-    
+
     // 开始监听
     startListening()
-    
+
     ElMessage.success('实时语音模式已启动')
     emit('stateChanged', { active: true, state: 'listening' })
-    
+
   } catch (error) {
     console.error('启动实时语音模式失败:', error)
     ElMessage.error('无法启动实时语音模式: ' + error.message)
@@ -313,14 +278,14 @@ const stopRealtimeMode = async () => {
     isActive.value = false
     isListening.value = false
     currentState.value = 'idle'
-    
+
     // 清理资源
     cleanupRecording()
     clearAllTimers()
-    
+
     ElMessage.info('实时语音模式已停止')
     emit('stateChanged', { active: false, state: 'idle' })
-    
+
   } catch (error) {
     console.error('停止实时语音模式失败:', error)
   }
@@ -336,10 +301,10 @@ const initializeRecording = async (stream) => {
       console.warn('Web Audio API初始化失败，将使用简单VAD:', error)
     }
   }
-  
+
   // 选择音频格式
   let mimeType = 'audio/webm;codecs=opus'
-  
+
   if (MediaRecorder.isTypeSupported('audio/wav')) {
     mimeType = 'audio/wav'
   } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -372,25 +337,25 @@ const startListening = () => {
     }
     return
   }
-  
+
   // 重置状态
   currentRecordingTime.value = 0
   silenceTime.value = 0
   hasDetectedSpeech.value = false
-  
+
   // 开始录音
   mediaRecorder.value.start()
   currentState.value = 'recording'
   isListening.value = true
-  
+
   if (settings.value.debugMode) {
     console.log('开始录音，状态:', mediaRecorder.value.state)
   }
-  
+
   // 开始计时
   recordingTimer.value = setInterval(() => {
     currentRecordingTime.value++
-    
+
     // 检查最大录音时长
     if (currentRecordingTime.value >= settings.value.maxSpeechDuration) {
       if (settings.value.debugMode) {
@@ -399,7 +364,7 @@ const startListening = () => {
       stopCurrentRecording()
     }
   }, 1000)
-  
+
   // 开始静音检测
   startSilenceDetection()
 }
@@ -408,7 +373,7 @@ const startSilenceDetection = () => {
   // 重置静音时间和语音检测状态
   silenceTime.value = 0
   hasDetectedSpeech.value = false
-  
+
   if (settings.value.useVad && audioContext.value) {
     // 使用Web Audio API进行VAD检测
     startVadDetection()
@@ -416,11 +381,11 @@ const startSilenceDetection = () => {
     // 使用简单的定时器模拟
     silenceTimer.value = setInterval(() => {
       silenceTime.value++
-      
+
       if (settings.value.debugMode) {
         console.log('简单VAD检测，静音时间:', silenceTime.value, '已检测到语音:', hasDetectedSpeech.value)
       }
-      
+
       // 智能停顿检测：如果已经检测到语音，给予宽限期
       let effectiveThreshold = settings.value.silenceThreshold
       if (hasDetectedSpeech.value && settings.value.smartPauseDetection) {
@@ -429,7 +394,7 @@ const startSilenceDetection = () => {
           console.log('启用宽限期，有效阈值:', effectiveThreshold)
         }
       }
-      
+
       // 如果静音时间超过阈值，停止录音
       if (silenceTime.value >= settings.value.silenceThreshold) {
         if (settings.value.debugMode) {
@@ -449,13 +414,13 @@ const startVadDetection = () => {
   analyser.value = audioContext.value.createAnalyser()
   analyser.value.fftSize = 256
   analyser.value.smoothingTimeConstant = 0.8
-  
+
   // 连接麦克风到分析器
   microphone.value.connect(analyser.value)
-  
+
   // 创建数据数组
   dataArray.value = new Uint8Array(analyser.value.frequencyBinCount)
-  
+
   // 开始VAD检测
   vadCheckInterval.value = setInterval(() => {
     // 检查录音器状态，如果状态不正确则停止VAD检测
@@ -467,19 +432,19 @@ const startVadDetection = () => {
       vadCheckInterval.value = null
       return
     }
-    
+
     analyser.value.getByteFrequencyData(dataArray.value)
-    
+
     // 计算音频能量
     const energy = dataArray.value.reduce((sum, value) => sum + value, 0) / dataArray.value.length
-    
+
     // 检测是否有语音活动（降低阈值，使其更容易检测到语音）
     const isSpeech = energy > 20 // 降低阈值
-    
+
     if (isSpeech) {
       // 检测到语音，重置静音时间
       silenceTime.value = 0
-      
+
       // 标记有效语音检测
       if (!hasValidSpeech.value) {
         hasValidSpeech.value = true
@@ -488,18 +453,18 @@ const startVadDetection = () => {
           console.log('检测到有效语音开始，能量:', energy)
         }
       }
-      
+
       if (settings.value.debugMode) {
         console.log('检测到语音活动，能量:', energy)
       }
     } else {
       // 静音，增加静音时间
       silenceTime.value += 0.1 // 每100ms增加0.1秒
-      
+
       if (settings.value.debugMode) {
         console.log('静音中，静音时间:', silenceTime.value.toFixed(1), '能量:', energy, '有效语音:', hasValidSpeech.value)
       }
-      
+
       // 如果静音时间超过阈值，停止录音
       if (silenceTime.value >= settings.value.silenceThreshold) {
         if (settings.value.debugMode) {
@@ -519,15 +484,15 @@ const stopCurrentRecording = () => {
     if (settings.value.debugMode) {
       console.log('停止录音，当前状态:', mediaRecorder.value.state)
     }
-    
+
     mediaRecorder.value.stop()
     currentState.value = 'processing'
     isListening.value = false
-    
+
     // 停止计时器
     clearRecordingTimer()
     clearSilenceTimer()
-    
+
     // 停止VAD检测
     if (vadCheckInterval.value) {
       clearInterval(vadCheckInterval.value)
@@ -542,7 +507,7 @@ const stopCurrentRecording = () => {
     isListening.value = false
     clearRecordingTimer()
     clearSilenceTimer()
-    
+
     // 停止VAD检测
     if (vadCheckInterval.value) {
       clearInterval(vadCheckInterval.value)
@@ -554,11 +519,11 @@ const stopCurrentRecording = () => {
 const processAudioChunk = async () => {
   try {
     const audioBlob = new Blob(audioChunks.value, { type: mediaRecorder.value.mimeType })
-    
+
     if (settings.value.debugMode) {
       console.log('处理音频块，大小:', audioBlob.size, '字节，时长:', currentRecordingTime.value, '秒', '有效语音:', hasValidSpeech.value)
     }
-    
+
     // 检查是否检测到有效语音
     if (!hasValidSpeech.value) {
       if (settings.value.debugMode) {
@@ -567,7 +532,7 @@ const processAudioChunk = async () => {
       resetRecording()
       return
     }
-    
+
     // 检查音频长度
     if (currentRecordingTime.value < settings.value.minSpeechDuration) {
       if (settings.value.debugMode) {
@@ -577,31 +542,31 @@ const processAudioChunk = async () => {
       resetRecording()
       return
     }
-    
+
     // 语音识别
     if (settings.value.debugMode) {
       console.log('开始语音识别...')
     }
-    
+
     const result = await apiStore.quickRecognize(audioBlob, {
       useVad: settings.value.useVad
     })
-    
+
     if (settings.value.debugMode) {
       console.log('语音识别结果:', result)
     }
-    
+
     if (result.success && result.text) {
       lastRecognitionText.value = result.text
       lastConfidence.value = result.confidence || 0
-      
+
       // 标记已检测到有效语音
       hasDetectedSpeech.value = true
-      
+
       if (settings.value.debugMode) {
         console.log('识别成功:', result.text, '置信度:', lastConfidence.value, '已标记语音检测')
       }
-      
+
       // 检查是否需要自动发送
       if (shouldAutoSend(result)) {
         if (settings.value.debugMode) {
@@ -622,10 +587,10 @@ const processAudioChunk = async () => {
     } else {
       console.warn('语音识别失败:', result)
     }
-    
+
     // 重置录音状态
     resetRecording()
-    
+
   } catch (error) {
     console.error('处理音频失败:', error)
     resetRecording()
@@ -634,21 +599,21 @@ const processAudioChunk = async () => {
 
 const shouldAutoSend = (result) => {
   if (!settings.value.autoSend) return false
-  
+
   // 检查置信度
   if (result.confidence && result.confidence < settings.value.confidenceThreshold) {
     return false
   }
-  
+
   // 检查触发关键词
   if (settings.value.triggerKeywords) {
     const keywords = settings.value.triggerKeywords.split(',').map(k => k.trim())
-    const hasKeyword = keywords.some(keyword => 
+    const hasKeyword = keywords.some(keyword =>
       result.text.toLowerCase().includes(keyword.toLowerCase())
     )
     if (!hasKeyword) return false
   }
-  
+
   return true
 }
 
@@ -657,28 +622,28 @@ const sendRecognizedMessage = async (text) => {
     if (settings.value.debugMode) {
       console.log('发送识别消息:', text)
     }
-    
+
     // 检查聊天状态，如果正在等待回复则暂停监听
     if (chatStore.loading.sendMessage) {
       currentState.value = 'waiting'
       isListening.value = false
     }
-    
+
     // 发送消息给父组件，让ChatPage处理发送和自动播放
     emit('messageRecognized', {
       text: text,
       confidence: lastConfidence.value,
       autoSend: true
     })
-    
+
     if (settings.value.debugMode) {
       console.log('消息已发送给ChatPage，等待TTS播放...')
     }
-    
+
   } catch (error) {
     console.error('发送消息失败:', error)
     ElMessage.error('发送消息失败: ' + error.message)
-    
+
     // 即使发送失败，也要重新开始监听
     if (isActive.value) {
       currentState.value = 'listening'
@@ -695,10 +660,10 @@ const resetRecording = () => {
   hasDetectedSpeech.value = false
   hasValidSpeech.value = false
   speechStartTime.value = 0
-  
+
   // 清理所有定时器
   clearAllTimers()
-  
+
   if (isActive.value) {
     // 延迟一点时间再开始新的录音，确保之前的录音完全结束
     setTimeout(() => {
@@ -725,7 +690,7 @@ const reinitializeRecording = async () => {
   try {
     // 清理旧的录音器
     cleanupRecording()
-    
+
     // 重新获取麦克风权限
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -735,15 +700,15 @@ const reinitializeRecording = async () => {
         noiseSuppression: true
       }
     })
-    
+
     // 重新初始化录音
     await initializeRecording(stream)
-    
+
     // 开始监听
     currentState.value = 'listening'
     isListening.value = true
     startListening()
-    
+
     if (settings.value.debugMode) {
       console.log('录音器重新初始化成功')
     }
@@ -770,7 +735,7 @@ const clearSilenceTimer = () => {
 const clearAllTimers = () => {
   clearRecordingTimer()
   clearSilenceTimer()
-  
+
   // 清理VAD检测定时器
   if (vadCheckInterval.value) {
     clearInterval(vadCheckInterval.value)
@@ -781,31 +746,31 @@ const clearAllTimers = () => {
 const cleanupRecording = () => {
   // 清理所有定时器
   clearAllTimers()
-  
+
   if (mediaRecorder.value) {
     if (mediaRecorder.value.state === 'recording') {
       mediaRecorder.value.stop()
     }
-    
+
     // 停止所有音频轨道
     if (mediaRecorder.value.stream) {
       mediaRecorder.value.stream.getTracks().forEach(track => track.stop())
     }
-    
+
     mediaRecorder.value = null
   }
-  
+
   // 清理Web Audio API资源
   if (analyser.value) {
     analyser.value.disconnect()
     analyser.value = null
   }
-  
+
   if (microphone.value) {
     microphone.value.disconnect()
     microphone.value = null
   }
-  
+
   if (audioContext.value) {
     audioContext.value.close()
     audioContext.value = null
@@ -831,7 +796,7 @@ watch(() => chatStore.loading.sendMessage, (isLoading) => {
     if (settings.value.debugMode) {
       console.log('消息发送完成，等待TTS播放...')
     }
-    
+
     // 给TTS生成和播放一些时间，然后重新开始监听
     setTimeout(() => {
       if (isActive.value) {
@@ -849,7 +814,7 @@ watch(() => chatStore.loading.sendMessage, (isLoading) => {
 // 组件卸载时清理
 onUnmounted(() => {
   stopRealtimeMode()
-  
+
   // 清理宽限期定时器
   if (gracePeriodTimer.value) {
     clearTimeout(gracePeriodTimer.value)
@@ -916,9 +881,11 @@ defineExpose({
   0% {
     box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
   }
+
   50% {
     box-shadow: 0 0 30px rgba(64, 158, 255, 0.6);
   }
+
   100% {
     box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
   }
@@ -973,10 +940,14 @@ defineExpose({
 }
 
 @keyframes pulse-dots {
-  0%, 80%, 100% {
+
+  0%,
+  80%,
+  100% {
     opacity: 0.3;
     transform: scale(0.8);
   }
+
   40% {
     opacity: 1;
     transform: scale(1);
@@ -1075,4 +1046,4 @@ defineExpose({
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-</style> 
+</style>

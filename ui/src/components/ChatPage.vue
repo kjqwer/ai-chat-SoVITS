@@ -40,8 +40,7 @@
 
                 <!-- 输入区域 -->
                 <MessageInput ref="messageInputRef" :speechRecognitionEnabled="speechRecognitionEnabled"
-                    @sendMessage="sendMessage" 
-                    @audioPlaybackStarted="handleRealtimeAudioPlaybackStarted"
+                    @sendMessage="sendMessage" @audioPlaybackStarted="handleRealtimeAudioPlaybackStarted"
                     @audioPlaybackEnded="handleRealtimeAudioPlaybackEnded" />
             </div>
         </div>
@@ -115,13 +114,13 @@ const sendMessage = async (messageText) => {
                                 }
                             }
                         }
-                        
+
                         // 如果检查了10次（10秒）还没有音频，停止检查
                         if (checkAudioGeneration.count === undefined) {
                             checkAudioGeneration.count = 0
                         }
                         checkAudioGeneration.count++
-                        
+
                         if (checkAudioGeneration.count < 10) {
                             setTimeout(checkAudioGeneration, 1000)
                         }
@@ -149,7 +148,7 @@ const generateAudio = async (conversationId, messageId, isRegenerate = false) =>
             setTimeout(async () => {
                 // 重新加载对话数据以确保获取最新的音频版本
                 await chatStore.loadConversations()
-                
+
                 const message = chatStore.conversations
                     .find(conv => conv.id === conversationId)?.messages
                     .find(msg => msg.id === messageId)

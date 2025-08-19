@@ -10,9 +10,6 @@
         <div class="input-actions">
           <div class="input-hint">
             <span>Ctrl + Enter 发送</span>
-            <span v-if="speechRecognitionEnabled && !isRecording" class="voice-hint-text">
-              • 按住右侧麦克风录音
-            </span>
             <span v-if="isRecording" class="recording-hint">
               正在录音中，松开停止
             </span>
@@ -29,72 +26,49 @@
 
       <!-- 语音输入按钮-->
       <div class="voice-input-section" v-if="speechRecognitionEnabled">
-        <div class="voice-button-container">
+        <div class="voice-buttons-container">
           <!-- 实时语音按钮 -->
-          <el-button 
-            type="success" 
-            :icon="VideoCamera"
-            @click="toggleRealtimeMode"
-            :loading="apiStore.loading"
-            circle 
-            size="large" 
-            class="realtime-voice-button"
-            :class="{ 'active': isRealtimeActive }"
-            title="实时语音对话"
-          >
-          </el-button>
+          <div class="voice-button-wrapper">
+            <el-button type="success" :icon="VideoCamera" @click="toggleRealtimeMode" :loading="apiStore.loading" circle
+              size="large" class="realtime-voice-button" :class="{ 'active': isRealtimeActive }" title="实时语音对话">
+            </el-button>
+            <div class="button-label">实时对话</div>
+          </div>
 
           <!-- 传统录音按钮 -->
-          <el-button 
-            :type="isRecording ? 'danger' : 'primary'" 
-            :icon="isRecording ? VideoPause : Microphone"
-            @mousedown="startRecording" 
-            @mouseup="stopRecording" 
-            @mouseleave="stopRecording"
-            @touchstart="handleTouchStart" 
-            @touchend="handleTouchEnd" 
-            @touchcancel="handleTouchEnd"
-            :loading="apiStore.loading" 
-            circle 
-            size="large" 
-            class="voice-button"
-            :class="{ 'recording': isRecording, 'pressing': isPressing }"
-            title="按住录音"
-          >
-          </el-button>
+          <div class="voice-button-wrapper">
+            <el-button :type="isRecording ? 'danger' : 'primary'" :icon="isRecording ? VideoPause : Microphone"
+              @mousedown="startRecording" @mouseup="stopRecording" @mouseleave="stopRecording"
+              @touchstart="handleTouchStart" @touchend="handleTouchEnd" @touchcancel="handleTouchEnd"
+              :loading="apiStore.loading" circle size="large" class="voice-button"
+              :class="{ 'recording': isRecording, 'pressing': isPressing }" title="按住录音">
+            </el-button>
+            <div class="button-label">按住录音</div>
+          </div>
+        </div>
 
-          <!-- 录音状态指示器 -->
-          <div v-if="isRecording" class="recording-indicator">
-            <div class="recording-dots">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <div class="recording-time">{{ formatRecordingTime(recordingTime) }}</div>
+        <!-- 录音状态指示器 -->
+        <div v-if="isRecording" class="recording-indicator">
+          <div class="recording-dots">
+            <span></span>
+            <span></span>
+            <span></span>
           </div>
+          <div class="recording-time">{{ formatRecordingTime(recordingTime) }}</div>
+        </div>
 
-          <!-- 提示文字 -->
-          <div class="voice-hint" v-if="!isRecording && !isRealtimeActive">
-            {{ isPressing ? '松开结束' : '按住录音' }}
-          </div>
-          
-          <!-- 实时语音状态 -->
-          <div class="realtime-hint" v-if="isRealtimeActive">
-            实时对话中
-          </div>
+        <!-- 实时语音状态 -->
+        <div class="realtime-hint" v-if="isRealtimeActive">
+          实时对话中
         </div>
       </div>
     </div>
 
     <!-- 实时语音对话组件 -->
-    <RealTimeVoiceChat
-      v-if="isRealtimeActive"
-      :enabled="speechRecognitionEnabled"
-      @messageRecognized="handleRealtimeMessage"
-      @stateChanged="handleRealtimeStateChange"
+    <RealTimeVoiceChat v-if="isRealtimeActive" :enabled="speechRecognitionEnabled"
+      @messageRecognized="handleRealtimeMessage" @stateChanged="handleRealtimeStateChange"
       @audioPlaybackStarted="handleRealtimeAudioPlaybackStarted"
-      @audioPlaybackEnded="handleRealtimeAudioPlaybackEnded"
-    />
+      @audioPlaybackEnded="handleRealtimeAudioPlaybackEnded" />
   </div>
 </template>
 
@@ -466,16 +440,7 @@ defineExpose({
   gap: 2px;
 }
 
-.voice-hint {
-  color: #409eff;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 5px;
-}
 
-.voice-hint-text {
-  color: #409eff;
-}
 
 .recording-hint {
   color: #f56c6c;
@@ -515,28 +480,55 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  min-width: 180px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 16px;
+  border: 1px solid #e4e7ed;
 }
 
-.voice-button-container {
-  position: relative;
+.voice-buttons-container {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+.voice-button-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+
+.voice-button-wrapper:hover .button-label {
+  color: #409eff;
+  transform: translateY(-1px);
+}
+
+.button-label {
+  font-size: 11px;
+  color: #909399;
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.3s ease;
 }
 
 .voice-button {
-  width: 56px !important;
-  height: 56px !important;
-  font-size: 22px;
+  width: 52px !important;
+  height: 52px !important;
+  font-size: 20px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 50% !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid transparent;
 }
 
 .voice-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  border-color: rgba(64, 158, 255, 0.3);
 }
 
 .voice-button.recording {
@@ -558,18 +550,19 @@ defineExpose({
 
 /* 实时语音按钮样式 */
 .realtime-voice-button {
-  width: 56px !important;
-  height: 56px !important;
-  font-size: 22px;
+  width: 52px !important;
+  height: 52px !important;
+  font-size: 20px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 50% !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-bottom: 8px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid transparent;
 }
 
 .realtime-voice-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  border-color: rgba(103, 194, 58, 0.3);
 }
 
 .realtime-voice-button.active {
@@ -585,9 +578,11 @@ defineExpose({
   0% {
     box-shadow: 0 0 20px rgba(103, 194, 58, 0.4);
   }
+
   50% {
     box-shadow: 0 0 30px rgba(103, 194, 58, 0.6);
   }
+
   100% {
     box-shadow: 0 0 20px rgba(103, 194, 58, 0.4);
   }
@@ -597,18 +592,27 @@ defineExpose({
   color: #67c23a;
   font-size: 12px;
   text-align: center;
-  margin-top: 5px;
-  font-weight: 500;
+  margin-top: 8px;
+  font-weight: 600;
+  background: rgba(103, 194, 58, 0.1);
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(103, 194, 58, 0.2);
 }
 
 .recording-indicator {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 12px;
   color: #f56c6c;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
+  background: rgba(245, 108, 108, 0.1);
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 108, 108, 0.2);
+  margin-top: 8px;
 }
 
 .recording-dots {
